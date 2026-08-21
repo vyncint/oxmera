@@ -41,7 +41,30 @@ every kernel edit without thinking about it.
 
 ## (c) `cargo oxide inspect` in the tier-1 container
 
-<!-- measured below; see "(c) result" -->
+Container: Apple `container` tool, native arm64 Ubuntu 24.04 guest,
+provisioned imperatively (no Docker, no Rosetta) with CUDA toolkit 13.2
+(sbsa), LLVM 21, the pinned nightly, and cargo-oxide 0.2.1.
+
+```
+$ container exec cuda-oxide-dev bash -lc 'cd /work && time cargo oxide inspect vecadd'
+...
+        add.f32         %r10, %r8, %r9;
+        st.global.b32   [%rd4], %r10;
+...
+real    0m9.355s
+```
+
+Real PTX from Rust source, 9.4 s warm, $0, no GPU. Two findings worth
+keeping:
+
+- A `#[kernel]` whose body is `todo!()` **builds but emits no PTX** —
+  `cargo oxide inspect` reports "could not read generated PTX". So the
+  exercise skeletons compile and pass the convergence gate, but the
+  inspect step only opens once a real body exists. The gate gates the
+  solution, not the skeleton, which is the right way around.
+- The arm64-container PTX path was previously verified byte-identical to
+  the x86_64 box for a sample kernel; that check must be repeated at
+  exercise D1 before any container PTX is treated as box-equivalent.
 
 ## (d) launchbound 1.0.2 driving reconverge 0.2.0 — the §pin pairing
 
