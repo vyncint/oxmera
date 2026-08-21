@@ -1,0 +1,35 @@
+# Environment shape 1: a bare CI runner — no GPU, no Metal, no container,
+# no gate tools. The shape `ci.yml` itself runs doctor in.
+os = "linux"
+arch = "x86_64"
+ladder_found = true
+
+[toolchain]
+rustc = "rustc 1.97.1 (fixture)"
+cargo = "cargo 1.97.1 (fixture)"
+just = "just 1.58.0"
+container = false
+
+[gpu]
+metal = false
+cuda = false
+
+[[ladder]]
+id = "a1"
+name = "shape and strides"
+status = "todo"
+
+[[ladder]]
+id = "a4"
+name = "the reference matmul"
+status = "todo"
+
+[[ladder]]
+id = "b2"
+name = "the flip — be caught by RC001"
+status = "todo"
+
+[[ladder]]
+id = "c1"
+name = "Metal elementwise"
+status = "planned"

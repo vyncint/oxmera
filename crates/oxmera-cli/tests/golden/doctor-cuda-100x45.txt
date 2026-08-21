@@ -1,0 +1,31 @@
+size: 100x45  cursor: 30,0
+oxmera doctor
+=============
+
+host: linux / x86_64
+
+toolchain
+  rustc        rustc 1.97.1 (fixture)
+  cargo        cargo 1.97.1 (fixture)
+  just         just 1.58.0
+  reconverge   cargo-reconverge 0.2.0
+  launchbound  launchbound 1.0.2
+  container    no
+
+tiers
+  tier 0  edit / check / CPU backend        available
+  tier 0  convergence gate (reconverge)     available
+  tier 1  container PTX (cargo oxide)       no container runtime found
+  tier 2  NVIDIA execution                  metered — approved GPU sessions only
+
+backend paths
+  cpu     always available — the correctness ground truth
+  metal   not on this host  (no convergence gate exists on this path)
+  cuda    toolkit visible  (verdicts and timings are per-part)
+
+exercise ladder
+  1 solved, 0 todo, 1 planned
+  [x] b1   first kernel
+  [.] d2   run and measure
+
+doctor: report complete

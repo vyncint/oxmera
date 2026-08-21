@@ -1,0 +1,33 @@
+size: 100x45  cursor: 32,0
+oxmera doctor
+=============
+
+host: linux / x86_64
+
+toolchain
+  rustc        rustc 1.97.1 (fixture)
+  cargo        cargo 1.97.1 (fixture)
+  just         just 1.58.0
+  reconverge   not found
+  launchbound  not found
+  container    no
+
+tiers
+  tier 0  edit / check / CPU backend        available
+  tier 0  convergence gate (reconverge)     install cargo-reconverge + reconverge-driver
+  tier 1  container PTX (cargo oxide)       no container runtime found
+  tier 2  NVIDIA execution                  metered — approved GPU sessions only
+
+backend paths
+  cpu     always available — the correctness ground truth
+  metal   not on this host  (no convergence gate exists on this path)
+  cuda    no toolkit here — tier 1/2 territory  (verdicts and timings are per-part)
+
+exercise ladder
+  0 solved, 3 todo, 1 planned
+  [ ] a1   shape and strides
+  [ ] a4   the reference matmul
+  [ ] b2   the flip — be caught by RC001
+  [.] c1   Metal elementwise
+
+doctor: report complete

@@ -1,0 +1,32 @@
+# Environment shape 2: an Apple-Silicon dev machine with the whole $0
+# stack — Metal path plausible, gate tools installed, container runtime up.
+os = "macos"
+arch = "aarch64"
+ladder_found = true
+
+[toolchain]
+rustc = "rustc 1.97.1 (fixture)"
+cargo = "cargo 1.97.1 (fixture)"
+just = "just 1.58.0"
+reconverge = "cargo-reconverge 0.2.0"
+launchbound = "launchbound 1.0.2"
+container = true
+
+[gpu]
+metal = true
+cuda = false
+
+[[ladder]]
+id = "a1"
+name = "shape and strides"
+status = "solved"
+
+[[ladder]]
+id = "a4"
+name = "the reference matmul"
+status = "todo"
+
+[[ladder]]
+id = "c1"
+name = "Metal elementwise"
+status = "planned"
