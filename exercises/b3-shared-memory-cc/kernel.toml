@@ -6,8 +6,10 @@
 name = "b3-shared-memory-cc"
 entry = "tile_copy"
 domain = 1
+# The source is convergence-stable; what differs per part is the RC004
+# shared-memory verdict on the big tile ("known" only admits flip|stable).
 needs_cc = "7.5"
-known = "per-part"
+known = "stable"
 
 [dims.block_x]
 values = [256]

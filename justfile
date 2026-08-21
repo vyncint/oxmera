@@ -7,7 +7,11 @@ default:
     @just --list
 
 # The full local gate. Green here before any push, on every commit.
-ci: fmt clippy check test deny research
+ci: fmt clippy check test doc deny research
+
+# Docs must build warning-free; O1's gate made this permanent.
+doc:
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
 fmt:
     cargo fmt --all --check

@@ -11,6 +11,9 @@ authors.workspace = true
 [[bin]]
 name = "oxmera"
 path = "src/main.rs"
+# The bin shares its name with the umbrella lib crate; documenting both
+# would collide in target/doc/oxmera/. The lib's docs win.
+doc = false
 
 [dependencies]
 serde.workspace = true

@@ -64,15 +64,23 @@ jobs:
           fail-on: never
           reconverge-version: "0.2.0"
           toolchain: nightly-2026-04-03
-      - name: Assert the 80 KiB tile is refused on a T4 budget
+      - name: Assert the 80 KiB tile is refused on a T4 budget (once solved)
         env:
           REFUSED: ${{ steps.gate.outputs.refused }}
           ADMITTED: ${{ steps.gate.outputs.admitted }}
         run: |
           set -euo pipefail
           echo "admitted=$ADMITTED refused=$REFUSED"
-          test "$REFUSED" = "1"
-          test "$ADMITTED" = "1"
+          # A todo!() skeleton uses no shared memory yet, so the RC004
+          # refusal only exists once the rung is solved. The expectation
+          # follows the manifest so an unclimbed ladder is never red and a
+          # solved rung's per-part lesson can never silently vanish.
+          if grep -q 'status = "solved"' exercises/b3-shared-memory-cc/exercise.toml; then
+            test "$REFUSED" = "1"
+            test "$ADMITTED" = "1"
+          else
+            echo "rung b3 still todo — recording counts only"
+          fi
       - name: Safety gate at cc 8.6 admits both
         id: gate86
         uses: vyncint/launchbound/action@v1
