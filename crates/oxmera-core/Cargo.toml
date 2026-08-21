@@ -10,3 +10,4 @@ authors.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+launchbound-space = "1.0.2"
