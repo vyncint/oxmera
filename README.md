@@ -70,6 +70,15 @@ just ci     # fmt, clippy -D warnings, check, test, cargo-deny, research check
 
 Gate on the exit code, never on output.
 
+## Limitations
+
+Read [docs/LIMITATIONS.md](docs/LIMITATIONS.md) before depending on
+anything here. The short version: **nothing is implemented yet** — every
+crate is a published skeleton and every operation panics; the Metal path
+has no convergence gate; a clean reconverge gate is not a proof of
+correctness; GPU verdicts and timings are per-part; and local timings
+predict nothing about NVIDIA hardware.
+
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
