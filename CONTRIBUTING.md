@@ -53,7 +53,9 @@ behaviour change riding along:
 A bump must touch, together: `research/rust-toolchain.toml` (nightly), the
 `cuda-oxide` rev in the research workspace manifests, the
 `reconverge-version` and `toolchain` inputs of the launchbound action in
-`.github/workflows/`, the pin table in `ARCHITECTURE.md`, and this table.
+`.github/workflows/`, the pin table in `ARCHITECTURE.md`, this table, and
+the enumerated family ban lists in `deny.toml` — cargo-deny bans are exact
+names, so any crate the new version adds to a family must be added there.
 If a bump changes a measured baseline, `docs/research-baseline.md` must be
 re-measured, not edited.
 

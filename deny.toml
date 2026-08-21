@@ -1,10 +1,20 @@
 # cargo-deny configuration for the stable root workspace.
 #
 # The dependency firewall (ARCHITECTURE.md): no crate in this workspace may
-# depend — directly or transitively — on cuda-oxide, reconverge, or
-# launchbound. cuda-oxide belongs only to the research/ workspace;
+# depend — directly or transitively — on the cuda-oxide, reconverge, or
+# launchbound families. cuda-oxide belongs only to the research/ workspace;
 # reconverge and launchbound are development *tools*, never dependencies.
-# Gate O2 proves these bans fail CI on a deliberate violation.
+#
+# Findings from gate O2, kept so nobody re-learns them:
+# - cargo-deny ban entries are exact names; globs like "launchbound-*" do
+#   not match. Every family member is enumerated below, and a pin bump must
+#   re-check the family lists (see CONTRIBUTING.md).
+# - Binary-only crates (launchbound-cli, cargo-reconverge, reconverge-driver)
+#   can never actually be dependencies — cargo drops a dependency edge with
+#   no lib target ("ignoring invalid dependency") — so their bans are
+#   defense in depth, not the firewall itself. The firewall is the *library*
+#   crate bans plus `sources.unknown-git = "deny"`, which blocks the
+#   git-only cuda-oxide workspace wholesale.
 
 [graph]
 all-features = true
@@ -30,12 +40,44 @@ multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true
 deny = [
-    { crate = "cuda-oxide", reason = "firewall: the CUDA path lives only in the research/ workspace, never in stable oxmera crates" },
-    { crate = "reconverge", reason = "firewall: reconverge is a development tool driven from the justfile and CI, never a Cargo dependency" },
-    { crate = "cargo-reconverge", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
-    { crate = "reconverge-driver", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
-    { crate = "launchbound", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    # --- launchbound family (crates.io, 1.0.2): a CLI/CI tool, never a dependency ---
     { crate = "launchbound-cli", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-space", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-bench", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-build", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-search", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-report", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-metal", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-model", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-prune", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-tui", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-runner", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound", reason = "firewall: reserved name, same rule as the rest of the family" },
+    # --- reconverge family (crates.io, 0.2.0): a development tool, never a dependency ---
+    { crate = "cargo-reconverge", reason = "firewall: reconverge is a development tool driven from the justfile and CI, never a Cargo dependency" },
+    { crate = "reconverge-driver", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-core", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-tui", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-artifacts", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-dialect-oxide", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-witness", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge", reason = "firewall: reserved name, same rule as the rest of the family" },
+    # --- cuda-oxide workspace (git-only; sources.unknown-git blocks the repo itself) ---
+    { crate = "cuda-oxide", reason = "firewall: the CUDA path lives only in the research/ workspace, never in stable oxmera crates" },
+    { crate = "cuda-oxide-codegen", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-intrinsics", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-intrinsics-gen", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-device", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-host", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-macros", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-artifact-finalizer", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-bindings", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-core", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cuda-async", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "cargo-oxide", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "oxide-artifacts", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "libnvvm-sys", reason = "firewall: the CUDA path lives only in the research/ workspace" },
+    { crate = "nvjitlink-sys", reason = "firewall: the CUDA path lives only in the research/ workspace" },
 ]
 
 [sources]
