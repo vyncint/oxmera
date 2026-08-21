@@ -1,13 +1,24 @@
 # oxmera
 
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSE-MIT)
+[![crates.io](https://img.shields.io/crates/v/oxmera?label=crates.io)](https://crates.io/crates/oxmera)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](Cargo.toml)
+[![research toolchain](https://img.shields.io/badge/research-nightly--2026--04--03-orange)](research/rust-toolchain.toml)
+[![GPU](https://img.shields.io/badge/GPU-not%20required-brightgreen)](docs/research-baseline.md)
+[![ci](https://img.shields.io/github/actions/workflow/status/vyncint/oxmera/ci.yml?label=ci)](https://github.com/vyncint/oxmera/actions/workflows/ci.yml)
+[![convergence-gate](https://img.shields.io/github/actions/workflow/status/vyncint/oxmera/gate.yml?label=convergence-gate)](https://github.com/vyncint/oxmera/actions/workflows/gate.yml)
+
 A Rust-native machine-learning and GPU-computing framework built from first
 principles, in the open, as a learning project that does not lie about what
 it is.
 
-**Status: skeleton under construction.** No tensor operation, kernel, or
-backend is implemented yet. What exists today is the workspace, the tooling,
-and the rules the rest will be built under. Every claim in this README is
-either measured or marked as a plan.
+**Status: skeleton, published as one.** The seams exist — nine layer crates
+with real signatures and typed errors, an exercise ladder, a termlens-tested
+`oxmera doctor`, complete CI, and a proven release pipeline — and **no
+tensor operation, kernel, or backend is implemented yet**: every operation
+body is `todo!()`, by design. The implementations are the maintainer's
+exercise ladder, climbed in public. Every claim in this README is either
+measured or marked as a plan.
 
 ## What this is
 
@@ -49,7 +60,8 @@ parts — launchbound publishes that its results do not transfer even between
 
 The ladder is what makes this a learning workbench rather than a scaffold:
 skeletons and specs are built into the repo, and the implementations are the
-maintainer's exercise. It lands at stage O4 (see [ROADMAP.md](ROADMAP.md)).
+maintainer's exercise. It is built: `exercises/manifest.toml` lists every
+rung, and CI compiles the unsolved ones so an unclimbed ladder is never red.
 
 | tier | rungs | needs | cost |
 |---|---|---|---|
@@ -65,7 +77,10 @@ LLVM**. The root workspace is stable Rust (MSRV 1.85, measured against the
 lockfile); the `research/` workspace pins `nightly-2026-04-03`.
 
 ```bash
-just ci     # fmt, clippy -D warnings, check, test, cargo-deny, research check
+just ci             # fmt, clippy -D warnings, check, test, docs, cargo-deny, research check
+just exercises      # the whole ladder: compiles todo rungs, verifies solved ones
+just exercise a1    # one rung
+cargo install oxmera-cli && oxmera doctor   # what can this machine do?
 ```
 
 Gate on the exit code, never on output.

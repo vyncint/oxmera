@@ -9,14 +9,14 @@ by hand.
 ## Workbench (infrastructure, in order)
 
 - [x] O0 — public repo bootstrap: workspaces, governance, firewall config, local loop
-- [ ] O1 — the seams: layer crates with signatures and `todo!()` bodies; ADRs 0001–0005
-- [ ] O2 — the firewall, proven: a deliberate violation fails CI, then is reverted
-- [ ] O3 — toolchain reconnaissance: measured baselines; verify launchbound 1.0.2 drives reconverge 0.2.0
-- [ ] O4 — the exercise ladder: harness, manifest, skeletons, specs (tiers A and B at minimum)
-- [ ] O5 — the terminal surface: `oxmera doctor`, termlens-tested from its first commit
-- [ ] O6 — CI complete on public runners
-- [ ] O7 — branch protection and security settings
-- [ ] O8 — the release pipeline, proven end to end (trusted publishing, no registry token)
+- [x] O1 — the seams: layer crates with signatures and `todo!()` bodies; ADRs 0001–0005
+- [x] O2 — the firewall, proven: a deliberate violation failed CI naming the rule, then was reverted
+- [x] O3 — toolchain reconnaissance: baselines measured; launchbound 1.0.2 verified driving reconverge 0.2.0
+- [x] O4 — the exercise ladder: harness, manifest, skeletons, specs (tiers A and B; C and D planned)
+- [x] O5 — the terminal surface: `oxmera doctor`, termlens-tested from its first commit
+- [x] O6 — CI complete on public runners
+- [x] O7 — branch protection and security settings
+- [ ] O8 — the release pipeline, proven end to end (v0.0.1; token for the first publish per ADR-0005, then Trusted Publishing)
 
 ## The climb (implementations, each one an exercise)
 
