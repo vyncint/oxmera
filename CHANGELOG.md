@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] — 2026-08-21
+
+Still a skeleton (see 0.0.1); no functional change to any crate. This
+release exists to prove the tokenless pipeline.
+
+### Changed
+
+- Publishing now uses crates.io Trusted Publishing: the release workflow
+  mints a short-lived token from GitHub OIDC per run. The one-time
+  first-publish token was deleted and revoked (ADR-0005).
+- README badges, `AGENTS.md` as the canonical agent contract (with
+  `CLAUDE.md` importing it), refreshed status prose, and a pins watcher
+  that fingerprints upstream drift instead of re-reporting it weekly.
+
 ## [0.0.1] — 2026-08-21
 
 A name reservation with documentation, not a usable library (ADR-0005).
