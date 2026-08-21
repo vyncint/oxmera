@@ -54,3 +54,8 @@ crates.io, so the **first** publish of each crate uses a short-lived
 trusted publisher is configured for every crate, the secret is deleted,
 and the token revoked. From then on the tokenless rule in SECURITY.md
 holds unconditionally.
+
+**2026-08-21, completed:** v0.0.1 published all ten crates with the
+token; the maintainer then configured trusted publishers, deleted the
+secret, and revoked the token. `release.yml` mints per-run tokens via
+`rust-lang/crates-io-auth-action` from v0.0.2 onward.
