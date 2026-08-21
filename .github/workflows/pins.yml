@@ -74,12 +74,12 @@ jobs:
             echo
             echo "The four pins (nightly \`$PIN_NIGHTLY\`, reconverge \`$PIN_RECONVERGE\`, cuda-oxide \`$PIN_CUDA_OXIDE\`, launchbound \`$PIN_LAUNCHBOUND\`) move together or not at all, one bump per commit, no behaviour change riding along. A bump must touch, together:"
             echo
-            echo '- `research/rust-toolchain.toml` and `exercises/b*/rust-toolchain.toml` (nightly)'
-            echo '- the `cuda-device` rev in `exercises/b*/Cargo.toml` and the research workspace manifests'
-            echo '- `reconverge-version` and `toolchain` inputs in `.github/workflows/gate.yml`'
-            echo '- the pin table in `ARCHITECTURE.md` and `CONTRIBUTING.md`'
-            echo '- the enumerated family ban lists in `deny.toml` (bans are exact names)'
-            echo '- `docs/research-baseline.md` must be re-measured, not edited'
+            echo "- \`research/rust-toolchain.toml\` and \`exercises/b*/rust-toolchain.toml\` (nightly)"
+            echo "- the \`cuda-device\` rev in \`exercises/b*/Cargo.toml\` and the research workspace manifests"
+            echo "- \`reconverge-version\` and \`toolchain\` inputs in \`.github/workflows/gate.yml\`"
+            echo "- the pin table in \`ARCHITECTURE.md\` and \`CONTRIBUTING.md\`"
+            echo "- the enumerated family ban lists in \`deny.toml\` (bans are exact names)"
+            echo "- \`docs/research-baseline.md\` must be re-measured, not edited"
             echo "- this workflow's PIN_* env block"
             echo
             echo "termlens moves alone (it pairs with nothing) but still gets its own commit."
