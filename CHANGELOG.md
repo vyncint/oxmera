@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.1] — 2026-08-21
+
+A name reservation with documentation, not a usable library (ADR-0005).
+Every crate is a skeleton: real seams, `todo!()` bodies, no working
+operations. `oxmera doctor` (in `oxmera-cli`) is the one thing that runs.
+See `docs/LIMITATIONS.md` before depending on anything.
+
 ### Added
 
 - Public repository bootstrap: stable root workspace (`oxmera` umbrella
