@@ -1,0 +1,7 @@
+[exercise]
+id = "b1"
+name = "first kernel"
+tier = "B"
+cost = "$0"
+tools = ["cargo-oxide", "reconverge"]
+status = "todo"

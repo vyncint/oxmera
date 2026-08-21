@@ -1,0 +1,37 @@
+# The space that makes the per-part verdict visible: tile=4096 (16 KiB)
+# fits everywhere; tile=20480 (80 KiB) fits an A10G (--cc 8.6, ~99 KiB
+# usable) and exceeds a T4 (--cc 7.5, 64 KiB). RC004 refuses it at 7.5 and
+# admits it at 8.6 — same source, different part, different verdict.
+[kernel]
+name = "b3-shared-memory-cc"
+entry = "tile_copy"
+domain = 1
+needs_cc = "7.5"
+known = "per-part"
+
+[dims.block_x]
+values = [256]
+
+[dims.tile]
+role = "spec"
+values = [4096, 20480]
+
+[bench]
+elements = 1048576
+grid_x = "elements / block_x"
+
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+smem_bytes = "tile * 4"

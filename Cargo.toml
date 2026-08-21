@@ -10,6 +10,7 @@ members = [
     "crates/oxmera-autograd",
     "crates/oxmera-nn",
     "crates/oxmera-optim",
+    "exercises/harness",
 ]
 # The GPU/compiler research layer is a separate workspace on a pinned
 # nightly (see research/rust-toolchain.toml and ARCHITECTURE.md).
@@ -25,6 +26,8 @@ authors = ["Vyncint Ng <vyncint@icloud.com>"]
 
 [workspace.dependencies]
 thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
 
 # Internal crates. The version field is required so path dependencies
 # survive `cargo publish`.

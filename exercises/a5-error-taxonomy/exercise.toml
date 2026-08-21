@@ -1,0 +1,7 @@
+[exercise]
+id = "a5"
+name = "the error taxonomy"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"

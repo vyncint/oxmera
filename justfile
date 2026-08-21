@@ -30,3 +30,14 @@ deny:
 research:
     cd research && cargo fmt --all --check
     cd research && cargo check --workspace --all-targets
+
+# Run one exercise rung by id (a1..b4): compiles it while todo, verifies
+# it once solved.
+exercise id:
+    cargo run -q -p exercise-harness -- run {{id}}
+
+# Run the whole ladder. On a fresh clone every rung is todo and this
+# exits 0 — an unclimbed ladder is never red, a climbed rung can never
+# silently break. B-tier rungs pull the pinned nightly on first use.
+exercises:
+    cargo run -q -p exercise-harness -- run-all

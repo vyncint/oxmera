@@ -1,0 +1,7 @@
+[exercise]
+id = "a4"
+name = "the reference matmul"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"

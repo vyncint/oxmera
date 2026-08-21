@@ -1,0 +1,138 @@
+# The exercise ladder. One entry per rung, in climbing order.
+# status: todo (built, unsolved — CI compiles it), solved (CI verifies it),
+# planned (not built yet). The harness (`just exercises`) enforces this.
+
+[[exercise]]
+id = "a1"
+name = "shape and strides"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
+path = "exercises/a1-shape-and-strides"
+kind = "crate"
+
+[[exercise]]
+id = "a2"
+name = "broadcasting"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
+path = "exercises/a2-broadcasting"
+kind = "crate"
+
+[[exercise]]
+id = "a3"
+name = "strided views"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
+path = "exercises/a3-strided-views"
+kind = "crate"
+
+[[exercise]]
+id = "a4"
+name = "the reference matmul"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
+path = "exercises/a4-reference-matmul"
+kind = "crate"
+
+[[exercise]]
+id = "a5"
+name = "the error taxonomy"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
+path = "exercises/a5-error-taxonomy"
+kind = "crate"
+
+[[exercise]]
+id = "b1"
+name = "first kernel"
+tier = "B"
+cost = "$0"
+tools = ["cargo-oxide", "reconverge"]
+status = "todo"
+path = "exercises/b1-first-kernel"
+kind = "kernel"
+
+[[exercise]]
+id = "b2"
+name = "the flip — be caught by RC001"
+tier = "B"
+cost = "$0"
+tools = ["reconverge"]
+status = "todo"
+path = "exercises/b2-the-flip"
+kind = "kernel"
+
+[[exercise]]
+id = "b3"
+name = "shared memory and --cc"
+tier = "B"
+cost = "$0"
+tools = ["reconverge", "launchbound"]
+status = "todo"
+path = "exercises/b3-shared-memory-cc"
+kind = "kernel"
+
+[[exercise]]
+id = "b4"
+name = "read the space"
+tier = "B"
+cost = "$0"
+tools = ["launchbound"]
+status = "todo"
+path = "exercises/b4-read-the-space"
+kind = "written"
+
+[[exercise]]
+id = "c1"
+name = "Metal elementwise"
+tier = "C"
+cost = "$0"
+tools = ["metal"]
+status = "planned"
+kind = "crate"
+
+[[exercise]]
+id = "c2"
+name = "Metal reduction (no convergence gate on this path)"
+tier = "C"
+cost = "$0"
+tools = ["metal"]
+status = "planned"
+kind = "crate"
+
+[[exercise]]
+id = "d1"
+name = "compile — container PTX vs box PTX"
+tier = "D"
+cost = "metered"
+tools = ["cargo-oxide", "gpu-session"]
+status = "planned"
+kind = "written"
+
+[[exercise]]
+id = "d2"
+name = "run and measure"
+tier = "D"
+cost = "metered"
+tools = ["cargo-oxide", "gpu-session"]
+status = "planned"
+kind = "written"
+
+[[exercise]]
+id = "d3"
+name = "tune — refused-but-faster, then apply"
+tier = "D"
+cost = "metered"
+tools = ["launchbound", "gpu-session"]
+status = "planned"
+kind = "written"

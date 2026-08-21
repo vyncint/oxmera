@@ -1,0 +1,12 @@
+[package]
+name = "b2-the-flip"
+description = "oxmera exercise B2: write a divergent barrier, be caught by RC001, then fix it. Being caught is the exercise."
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+cuda-device = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26" }

@@ -1,0 +1,6 @@
+# The pinned nightly shared by cuda-oxide and reconverge (see the pin
+# policy in CONTRIBUTING.md). Per-directory so `cargo` and the tools pick
+# it up when run from this exercise.
+[toolchain]
+channel = "nightly-2026-04-03"
+components = ["rustfmt", "clippy", "rust-src"]

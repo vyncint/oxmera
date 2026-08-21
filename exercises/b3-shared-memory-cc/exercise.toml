@@ -1,0 +1,7 @@
+[exercise]
+id = "b3"
+name = "shared memory and --cc"
+tier = "B"
+cost = "$0"
+tools = ["reconverge", "launchbound"]
+status = "todo"

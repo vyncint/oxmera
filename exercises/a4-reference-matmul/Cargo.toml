@@ -1,0 +1,20 @@
+[package]
+name = "a4-reference-matmul"
+description = "oxmera exercise a4: the reference matmul. The spec is here; the implementation is the maintainer's."
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Standalone spec crate: not a workspace member, so an unsolved rung can
+# never turn the root workspace red. The harness compiles it while todo and
+# tests it once solved.
+[workspace]
+
+[dev-dependencies]
+oxmera-core = { path = "../../crates/oxmera-core" }
+oxmera-tensor = { path = "../../crates/oxmera-tensor" }
+oxmera-ops = { path = "../../crates/oxmera-ops" }
+oxmera-runtime = { path = "../../crates/oxmera-runtime" }
+oxmera-cpu = { path = "../../crates/oxmera-cpu" }
+proptest = "1"

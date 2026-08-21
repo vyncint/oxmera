@@ -1,0 +1,7 @@
+[exercise]
+id = "b2"
+name = "the flip — be caught by RC001"
+tier = "B"
+cost = "$0"
+tools = ["reconverge"]
+status = "todo"

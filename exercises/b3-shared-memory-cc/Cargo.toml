@@ -1,0 +1,12 @@
+[package]
+name = "b3-shared-memory-cc"
+description = "oxmera exercise B3: size a shared-memory tile past one part's budget and watch the verdict differ per --cc."
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+cuda-device = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26" }

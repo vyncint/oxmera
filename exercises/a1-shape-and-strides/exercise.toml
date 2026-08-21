@@ -1,0 +1,7 @@
+[exercise]
+id = "a1"
+name = "shape and strides"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"

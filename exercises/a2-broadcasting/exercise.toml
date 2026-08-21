@@ -1,0 +1,7 @@
+[exercise]
+id = "a2"
+name = "broadcasting"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"

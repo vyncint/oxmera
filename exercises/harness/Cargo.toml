@@ -1,0 +1,14 @@
+[package]
+name = "exercise-harness"
+description = "Runs the oxmera exercise ladder: compiles todo rungs, tests solved ones. Infrastructure, not an exercise."
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true

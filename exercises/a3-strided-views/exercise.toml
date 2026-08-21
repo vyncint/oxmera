@@ -1,0 +1,7 @@
+[exercise]
+id = "a3"
+name = "strided views"
+tier = "A"
+cost = "$0"
+tools = ["cargo"]
+status = "todo"
