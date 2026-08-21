@@ -1,0 +1,11 @@
+[package]
+name = "oxmera-cuda"
+description = "The cuda-oxide execution path for oxmera. Placeholder: nothing lives here yet."
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

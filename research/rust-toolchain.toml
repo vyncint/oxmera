@@ -1,0 +1,6 @@
+# Pinned nightly shared by cuda-oxide and reconverge. The four pins
+# (nightly, reconverge, cuda-oxide, launchbound) move together or not at
+# all — see CONTRIBUTING.md for every file a bump must touch.
+[toolchain]
+channel = "nightly-2026-04-03"
+components = ["rustfmt", "clippy", "rust-src"]

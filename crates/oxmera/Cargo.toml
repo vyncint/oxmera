@@ -1,0 +1,11 @@
+[package]
+name = "oxmera"
+description = "A Rust-native ML/GPU computing framework built from first principles as a learning project. Skeleton under construction: no working operations yet."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

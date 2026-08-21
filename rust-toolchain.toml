@@ -1,0 +1,5 @@
+# The root workspace targets stable Rust. MSRV (rust-version in Cargo.toml)
+# is measured against the committed lockfile, not declared by intent.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

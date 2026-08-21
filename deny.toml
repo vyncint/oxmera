@@ -1,0 +1,43 @@
+# cargo-deny configuration for the stable root workspace.
+#
+# The dependency firewall (ARCHITECTURE.md): no crate in this workspace may
+# depend — directly or transitively — on cuda-oxide, reconverge, or
+# launchbound. cuda-oxide belongs only to the research/ workspace;
+# reconverge and launchbound are development *tools*, never dependencies.
+# Gate O2 proves these bans fail CI on a deliberate violation.
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    { crate = "cuda-oxide", reason = "firewall: the CUDA path lives only in the research/ workspace, never in stable oxmera crates" },
+    { crate = "reconverge", reason = "firewall: reconverge is a development tool driven from the justfile and CI, never a Cargo dependency" },
+    { crate = "cargo-reconverge", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "reconverge-driver", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
+    { crate = "launchbound", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+    { crate = "launchbound-cli", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

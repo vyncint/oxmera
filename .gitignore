@@ -1,0 +1,16 @@
+# build artifacts
+/target
+/research/target
+
+# GPU evidence logs live in the private lab, committed there — never here.
+.gpu-evidence/
+
+# lab artefacts that must never land in the public repo (defense in depth;
+# their real home is vyncint/oxmera-lab)
+/prompts/
+/solutions/
+/evidence/
+/notes/
+
+# macOS
+.DS_Store
