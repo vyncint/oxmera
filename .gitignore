@@ -1,6 +1,5 @@
-# build artifacts
-/target
-/research/target
+# build artifacts (root workspace, research workspace, standalone exercises)
+target/
 
 # GPU evidence logs live in the private lab, committed there — never here.
 .gpu-evidence/
