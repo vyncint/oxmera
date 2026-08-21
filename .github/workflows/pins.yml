@@ -1,0 +1,87 @@
+# Watches the four pins' upstreams and opens an issue when one moves.
+# It NEVER bumps anything — the pins move together, by hand, one bump per
+# commit, per the policy in CONTRIBUTING.md.
+
+name: pins
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # weekly, Monday 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    name: report upstream pin drift
+    runs-on: ubuntu-latest
+    env:
+      PIN_NIGHTLY: nightly-2026-04-03
+      PIN_RECONVERGE: 0.2.0
+      PIN_LAUNCHBOUND: 1.0.2
+      PIN_CUDA_OXIDE: a766fc26
+      PIN_TERMLENS: 0.5.0
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Compare pins with upstream
+        id: drift
+        run: |
+          set -euo pipefail
+          ua="oxmera-pins-watch (github.com/${GITHUB_REPOSITORY})"
+          drift=""
+
+          latest() {
+            curl -sf -A "$ua" "https://crates.io/api/v1/crates/$1" \
+              | python3 -c 'import sys, json; print(json.load(sys.stdin)["crate"]["max_stable_version"])'
+          }
+
+          rc=$(latest cargo-reconverge)
+          [ "$rc" = "$PIN_RECONVERGE" ] || drift="$drift- reconverge: pinned $PIN_RECONVERGE, crates.io has $rc\n"
+
+          lb=$(latest launchbound-cli)
+          [ "$lb" = "$PIN_LAUNCHBOUND" ] || drift="$drift- launchbound: pinned $PIN_LAUNCHBOUND, crates.io has $lb\n"
+
+          tl=$(latest termlens)
+          [ "$tl" = "$PIN_TERMLENS" ] || drift="$drift- termlens: pinned $PIN_TERMLENS, crates.io has $tl\n"
+
+          head=$(git ls-remote https://github.com/NVlabs/cuda-oxide HEAD | cut -c1-8)
+          [ "$head" = "$PIN_CUDA_OXIDE" ] || drift="$drift- cuda-oxide: pinned $PIN_CUDA_OXIDE, upstream HEAD is $head\n"
+
+          {
+            echo "drift<<EOF"
+            printf '%b' "$drift"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open (or skip) the drift issue
+        if: steps.drift.outputs.drift != ''
+        env:
+          DRIFT: ${{ steps.drift.outputs.drift }}
+        run: |
+          set -euo pipefail
+          title="pins: upstream moved"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq length)
+          if [ "$existing" != "0" ]; then
+            echo "an open drift issue already exists; not duplicating"
+            exit 0
+          fi
+          {
+            echo "Upstream movement detected by the scheduled pins watch. Nothing was bumped."
+            echo
+            printf '%s\n' "$DRIFT"
+            echo
+            echo "The four pins (nightly \`$PIN_NIGHTLY\`, reconverge \`$PIN_RECONVERGE\`, cuda-oxide \`$PIN_CUDA_OXIDE\`, launchbound \`$PIN_LAUNCHBOUND\`) move together or not at all, one bump per commit, no behaviour change riding along. A bump must touch, together:"
+            echo
+            echo '- `research/rust-toolchain.toml` and `exercises/b*/rust-toolchain.toml` (nightly)'
+            echo '- the `cuda-device` rev in `exercises/b*/Cargo.toml` and the research workspace manifests'
+            echo '- `reconverge-version` and `toolchain` inputs in `.github/workflows/gate.yml`'
+            echo '- the pin table in `ARCHITECTURE.md` and `CONTRIBUTING.md`'
+            echo '- the enumerated family ban lists in `deny.toml` (bans are exact names)'
+            echo '- `docs/research-baseline.md` must be re-measured, not edited'
+            echo "- this workflow's PIN_* env block"
+            echo
+            echo "termlens moves alone (it pairs with nothing) but still gets its own commit."
+          } > /tmp/issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file /tmp/issue-body.md

@@ -1,0 +1,84 @@
+# The convergence safety gate: launchbound's action over the tier-B
+# exercise kernels, on a plain runner, no GPU anywhere. The
+# reconverge-version and toolchain inputs pin the §CONTRIBUTING pairing
+# (measured at gate O3) — a pin bump must touch this file.
+
+name: convergence-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-b1:
+    name: b1 elementwise space stays clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Safety gate
+        id: gate
+        uses: vyncint/launchbound/action@v1
+        with:
+          kernel: exercises/b1-first-kernel
+          cc: "7.5"
+          fail-on: refused
+          reconverge-version: "0.2.0"
+          toolchain: nightly-2026-04-03
+      - name: Show the verdict
+        run: |
+          echo "verdict=${{ steps.gate.outputs.verdict }}"
+          echo "admitted=${{ steps.gate.outputs.admitted }} refused=${{ steps.gate.outputs.refused }}"
+
+  gate-b2:
+    name: b2 committed state stays clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      # The flip is a working-tree experience (phase one is being caught
+      # locally); what lands in the repo must always gate clean.
+      - name: Safety gate
+        uses: vyncint/launchbound/action@v1
+        with:
+          kernel: exercises/b2-the-flip
+          cc: "7.5"
+          fail-on: refused
+          reconverge-version: "0.2.0"
+          toolchain: nightly-2026-04-03
+
+  gate-b3:
+    name: b3 per-part verdict is caught
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Safety gate at cc 7.5 (report, never fail)
+        id: gate
+        uses: vyncint/launchbound/action@v1
+        with:
+          kernel: exercises/b3-shared-memory-cc
+          cc: "7.5"
+          fail-on: never
+          reconverge-version: "0.2.0"
+          toolchain: nightly-2026-04-03
+      - name: Assert the 80 KiB tile is refused on a T4 budget
+        env:
+          REFUSED: ${{ steps.gate.outputs.refused }}
+          ADMITTED: ${{ steps.gate.outputs.admitted }}
+        run: |
+          set -euo pipefail
+          echo "admitted=$ADMITTED refused=$REFUSED"
+          test "$REFUSED" = "1"
+          test "$ADMITTED" = "1"
+      - name: Safety gate at cc 8.6 admits both
+        id: gate86
+        uses: vyncint/launchbound/action@v1
+        with:
+          kernel: exercises/b3-shared-memory-cc
+          cc: "8.6"
+          fail-on: refused
+          reconverge-version: "0.2.0"
+          toolchain: nightly-2026-04-03

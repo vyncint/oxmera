@@ -1,0 +1,27 @@
+# The nightly research workspace: cargo check only — no execution, no
+# GPU, no CUDA toolkit. If this fails while ci.yml passes, a pin drifted.
+
+name: research
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: research check (pinned nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Pinned nightly from research/rust-toolchain.toml
+        run: rustup toolchain install nightly-2026-04-03 --profile minimal --component rustfmt,clippy,rust-src
+      - name: Format
+        working-directory: research
+        run: cargo fmt --all --check
+      - name: Check
+        working-directory: research
+        run: cargo check --workspace --all-targets

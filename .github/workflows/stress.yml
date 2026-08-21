@@ -1,0 +1,27 @@
+# termlens through a real PTY on hermetic fixtures, ubuntu and macos:
+# three environment-shape goldens plus the 100-iteration stress.
+
+name: stress
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  termlens:
+    name: termlens (goldens + stress)
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: stable
+      - name: Doctor goldens and 100-iteration stress
+        run: cargo test -p oxmera-cli --test doctor

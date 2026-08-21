@@ -1,0 +1,54 @@
+# Enforces the attribution and sign-off rules over full history:
+# - no AI/bot attribution anywhere (Co-Authored-By naming an agent,
+#   "Generated with", the robot emoji, *[bot] authors)
+# - every commit carries a DCO Signed-off-by matching its author
+#
+# On pull requests this checks out the PR head SHA, never the synthetic
+# merge commit GitHub fabricates (that commit is authored by GitHub with
+# no DCO trailer and would fail this job's own rule).
+
+name: no-ai-attribution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: attribution and DCO over full history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Scan every reachable commit
+        run: |
+          set -euo pipefail
+          fail=0
+          for sha in $(git rev-list HEAD); do
+            author_name=$(git log -1 --format='%an' "$sha")
+            author_email=$(git log -1 --format='%ae' "$sha")
+            body=$(git log -1 --format='%B' "$sha")
+
+            if printf '%s' "$author_name" | grep -qiE '\[bot\]$'; then
+              echo "::error::$sha authored by a bot account: $author_name"; fail=1
+            fi
+            if printf '%s' "$body" | grep -qiE '^co-authored-by:.*(claude|gpt|copilot|gemini|cursor|codex|llm|openai|anthropic|\[bot\]|\bai\b|assistant|agent)'; then
+              echo "::error::$sha carries AI co-author attribution"; fail=1
+            fi
+            if printf '%s' "$body" | grep -qiE 'generated (with|by)'; then
+              echo "::error::$sha says 'Generated with/by'"; fail=1
+            fi
+            if printf '%s' "$body" | grep -q $'\xF0\x9F\xA4\x96'; then
+              echo "::error::$sha contains the robot emoji"; fail=1
+            fi
+            if ! printf '%s' "$body" | grep -q "Signed-off-by:.*<$author_email>"; then
+              echo "::error::$sha lacks a DCO Signed-off-by matching $author_email"; fail=1
+            fi
+          done
+          exit "$fail"
