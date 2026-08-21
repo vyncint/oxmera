@@ -1,0 +1,12 @@
+[package]
+name = "oxmera-core"
+description = "Core types for oxmera: dtype, shape, strides, device handle, error taxonomy. Skeleton under construction: signatures only, no working operations."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror.workspace = true

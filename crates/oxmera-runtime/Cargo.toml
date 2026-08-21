@@ -1,6 +1,6 @@
 [package]
-name = "oxmera"
-description = "A Rust-native ML/GPU computing framework built from first principles as a learning project. Skeleton under construction: no working operations yet."
+name = "oxmera-runtime"
+description = "Dispatch and scheduling seam for oxmera: resolves a device handle to a backend. Skeleton under construction: signatures only."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,5 +12,3 @@ authors.workspace = true
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
 oxmera-ops.workspace = true
-oxmera-runtime.workspace = true
-oxmera-cpu.workspace = true

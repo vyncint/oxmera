@@ -1,6 +1,16 @@
 [workspace]
 resolver = "3"
-members = ["crates/oxmera"]
+members = [
+    "crates/oxmera",
+    "crates/oxmera-core",
+    "crates/oxmera-tensor",
+    "crates/oxmera-ops",
+    "crates/oxmera-runtime",
+    "crates/oxmera-cpu",
+    "crates/oxmera-autograd",
+    "crates/oxmera-nn",
+    "crates/oxmera-optim",
+]
 # The GPU/compiler research layer is a separate workspace on a pinned
 # nightly (see research/rust-toolchain.toml and ARCHITECTURE.md).
 exclude = ["research"]
@@ -12,3 +22,17 @@ rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vyncint/oxmera"
 authors = ["Vyncint Ng <vyncint@icloud.com>"]
+
+[workspace.dependencies]
+thiserror = "2"
+
+# Internal crates. The version field is required so path dependencies
+# survive `cargo publish`.
+oxmera-core = { path = "crates/oxmera-core", version = "0.0.0" }
+oxmera-tensor = { path = "crates/oxmera-tensor", version = "0.0.0" }
+oxmera-ops = { path = "crates/oxmera-ops", version = "0.0.0" }
+oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.0.0" }
+oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.0.0" }
+oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.0.0" }
+oxmera-nn = { path = "crates/oxmera-nn", version = "0.0.0" }
+oxmera-optim = { path = "crates/oxmera-optim", version = "0.0.0" }

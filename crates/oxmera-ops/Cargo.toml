@@ -1,0 +1,13 @@
+[package]
+name = "oxmera-ops"
+description = "Operation traits for oxmera backends: signatures only, by design. Skeleton under construction."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxmera-core.workspace = true
+oxmera-tensor.workspace = true

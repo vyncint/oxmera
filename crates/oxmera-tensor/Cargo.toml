@@ -1,0 +1,12 @@
+[package]
+name = "oxmera-tensor"
+description = "The oxmera tensor type: storage ownership, layouts, views. Skeleton under construction: signatures only, no working operations."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxmera-core.workspace = true
