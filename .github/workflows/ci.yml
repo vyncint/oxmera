@@ -1,0 +1,25 @@
+# The main CI gate. Grows to its full O6 shape (fmt, clippy, tests, MSRV,
+# docs, both OSes); what exists from O2 on is the dependency firewall:
+# cargo-deny bans on cuda-oxide / reconverge / launchbound over the whole
+# stable workspace. A firewall never tested is a firewall that does not
+# exist — the O2 gate deliberately violates it on a scratch branch.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  firewall:
+    name: firewall (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          command: check bans licenses sources advisories
