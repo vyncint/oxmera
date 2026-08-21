@@ -121,14 +121,14 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "oxmera-core"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "oxmera-cpu"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "oxmera-core",
  "oxmera-ops",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-ops"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "oxmera-core",
  "oxmera-tensor",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-runtime"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "oxmera-core",
  "oxmera-ops",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-tensor"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "oxmera-core",
 ]

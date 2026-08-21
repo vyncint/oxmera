@@ -47,8 +47,18 @@ jobs:
             if printf '%s' "$body" | grep -q $'\xF0\x9F\xA4\x96'; then
               echo "::error::$sha contains the robot emoji"; fail=1
             fi
+            # DCO: the trailer must match the author. One documented
+            # equivalence: GitHub's squash/rebase merges rewrite the author
+            # email to <id>+<login>@users.noreply.github.com while the
+            # trailer keeps the real address — same person, so a trailer
+            # matching the author NAME satisfies the rule there.
             if ! printf '%s' "$body" | grep -q "Signed-off-by:.*<$author_email>"; then
-              echo "::error::$sha lacks a DCO Signed-off-by matching $author_email"; fail=1
+              if printf '%s' "$author_email" | grep -qE '^[0-9]+\+.*@users\.noreply\.github\.com$' \
+                 && printf '%s' "$body" | grep -q "Signed-off-by: $author_name <"; then
+                :
+              else
+                echo "::error::$sha lacks a DCO Signed-off-by matching $author_email"; fail=1
+              fi
             fi
           done
           exit "$fail"
