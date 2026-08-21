@@ -1,9 +1,10 @@
 # Architecture
 
-Status: this file describes the intended shape. The layer crates land at
-stage O1 (see [ROADMAP.md](ROADMAP.md)); when they do, each layer's section
-here gains its three answers — what it owns, what it must never know about,
-and which layers may depend on it.
+The layer crates exist as seams — real signatures, `todo!()` bodies. Each
+layer answers three questions: what it owns, what it must never know
+about, and who may depend on it. Design decisions live in
+[docs/adr/](docs/adr/); ADR-0004 (the backend seam) shapes most of what
+follows.
 
 ## Layers
 
@@ -14,12 +15,80 @@ oxmera-tensor     tensor type, storage ownership, views
 oxmera-ops        operation traits — signatures only
 oxmera-runtime    dispatch and scheduling seam
 oxmera-cpu        reference backend: correct, unoptimized, always available
-oxmera-metal      local execution on Apple Silicon (feature-gated, macOS)
-oxmera-cli        `oxmera doctor` and friends; termlens-tested
+oxmera-autograd   reserved: reverse-mode AD (nothing lives here yet)
+oxmera-nn         reserved: layers (nothing lives here yet)
+oxmera-optim      reserved: optimizers (nothing lives here yet)
+oxmera-metal      local execution on Apple Silicon (feature-gated, macOS; not created yet — ADR-0002)
+oxmera-cli        `oxmera doctor` and friends; termlens-tested (lands at O5)
 --- separate nightly workspace: research/ ---
 oxmera-cuda       cuda-oxide path (feature-gated, Linux, non-default)
 exercises/*       the exercise ladder
 ```
+
+### The three answers, per layer
+
+**`oxmera-core`**
+- Owns: the vocabulary — `DType`, `Shape`, `Strides`, `Layout`, `Device`
+  (a handle, not a backend), the `Error` taxonomy, and the shape/stride/
+  broadcast arithmetic (exercise rungs A1/A2/A5).
+- Must never know about: tensors, storage, backends, dispatch, any GPU
+  toolchain, any I/O.
+- Depended on by: everything. Depends on `std` and `thiserror` only.
+
+**`oxmera-tensor`**
+- Owns: `Storage` (an owned, refcounted, dtype-tagged buffer on one
+  device) and `Tensor` (a `Layout` over shared storage), plus the view
+  operations that change layout without touching data (rung A3).
+- Must never know about: how any operation computes, which backends
+  exist, dispatch policy.
+- Depended on by: `ops`, `runtime`, backends, umbrella. Depends on `core`.
+
+**`oxmera-ops`**
+- Owns: the operation traits (`UnaryOps`, `BinaryOps`, `MatmulOps`,
+  `ReduceOps`) and the documented contracts backends must honor.
+  Signatures only, permanently — implementations never live here.
+- Must never know about: which backends exist, the runtime, scheduling.
+- Depended on by: `runtime` and every backend. Depends on `core`, `tensor`.
+
+**`oxmera-runtime`**
+- Owns: the `Backend` trait (op traits + identity), the device→backend
+  registry, and the user-facing `TensorOps` surface that dispatches
+  through it. Dispatch is dynamic (`Arc<dyn Backend>`) per ADR-0004.
+- Must never know about: how operations compute; `cuda-oxide`,
+  `reconverge`, `launchbound` (backends register themselves — the runtime
+  never reaches for them).
+- Depended on by: backends and the umbrella. Depends on `core`, `tensor`,
+  `ops`.
+
+**`oxmera-cpu`**
+- Owns: the ground truth. Its implementations define what every operation
+  means; every other backend is validated against it; it is never
+  optimized at the cost of readability.
+- Must never know about: other backends, dispatch policy, anything
+  GPU-shaped.
+- Depended on by: the umbrella only (and, for validation, backend test
+  suites). Depends on `core`, `tensor`, `ops`, `runtime`.
+
+**`oxmera-autograd` / `oxmera-nn` / `oxmera-optim`** (reserved)
+- Own: nothing yet — each is a placeholder fixing the layer's place in
+  the firewall before its design ADR exists.
+- Must never know about: `cuda-oxide`, `reconverge`, `launchbound` —
+  reserved crates are inside the firewall from birth.
+- Depended on by: nothing yet. Depend on `core` (and later `tensor`/`ops`).
+
+**`oxmera` (umbrella)**
+- Owns: re-exports only — each layer as a module, the everyday types at
+  the root. No logic, permanently.
+- Must never know about: anything the layers do not already export.
+- Depended on by: users. Depends on every stable layer.
+
+**`oxmera-cuda` (research workspace)**
+- Owns: the cuda-oxide kernels and their launch contracts, once tier B
+  opens.
+- Must never know about: the stable workspace's internals beyond published
+  interfaces; it can never be a member of the root workspace (ADR-0003).
+- Depended on by: nothing in the stable workspace, ever. That direction is
+  the firewall.
 
 ## The dependency firewall
 

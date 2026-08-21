@@ -21,5 +21,10 @@ fixes for anything real will be prioritized over roadmap work.
   workspace (`#![forbid(unsafe_code)]`).
 - Supply-chain policy: `cargo deny` runs in CI (advisories, bans, licenses,
   sources); Dependabot alerts and security updates are enabled; workflows
-  default to `permissions: contents: read`; no long-lived registry token
-  exists anywhere.
+  default to `permissions: contents: read`.
+- Registry token policy: the end state is crates.io Trusted Publishing
+  with no stored registry token. Exception, recorded in ADR-0005: the
+  *first* publish of each crate requires a token (Trusted Publishing can
+  only be configured on existing crates), so a `CARGO_REGISTRY_TOKEN`
+  secret exists until immediately after `v0.0.1`, then is deleted and the
+  token revoked.
