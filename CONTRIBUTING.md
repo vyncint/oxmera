@@ -77,10 +77,11 @@ re-measured, not edited.
 3. Versions bumped in their own commit; `CHANGELOG.md` updated.
 4. Tag `vX.Y.Z` matching the crate version exactly — the release workflow
    refuses a mismatch.
-5. Publishing uses crates.io Trusted Publishing (OIDC) — except the first
-   publish of a new crate, which crates.io requires a token for; ADR-0005
-   records the procedure (token in, publish, trusted publisher configured,
-   token deleted and revoked).
+5. Publishing uses crates.io Trusted Publishing (OIDC). There is no
+   registry token to leak, so do not create one. A brand-new crate joining
+   the workspace needs its trusted publisher configured on crates.io after
+   its first publish — ADR-0005 records the one-time procedure used for
+   the initial ten.
 
 ## License
 

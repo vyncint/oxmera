@@ -22,9 +22,8 @@ fixes for anything real will be prioritized over roadmap work.
 - Supply-chain policy: `cargo deny` runs in CI (advisories, bans, licenses,
   sources); Dependabot alerts and security updates are enabled; workflows
   default to `permissions: contents: read`.
-- Registry token policy: the end state is crates.io Trusted Publishing
-  with no stored registry token. Exception, recorded in ADR-0005: the
-  *first* publish of each crate requires a token (Trusted Publishing can
-  only be configured on existing crates), so a `CARGO_REGISTRY_TOKEN`
-  secret exists until immediately after `v0.0.1`, then is deleted and the
-  token revoked.
+- Registry token policy: releases use crates.io Trusted Publishing (a
+  short-lived token minted from GitHub OIDC per run). **No long-lived
+  registry token exists anywhere.** The one-time first-publish exception
+  ADR-0005 documented was retired immediately after `v0.0.1`: the secret
+  was deleted and the token revoked.
