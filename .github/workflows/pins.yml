@@ -31,6 +31,7 @@ jobs:
           set -euo pipefail
           ua="oxmera-pins-watch (github.com/${GITHUB_REPOSITORY})"
           drift=""
+          fingerprint=""
 
           latest() {
             curl -sf -A "$ua" "https://crates.io/api/v1/crates/$1" \
@@ -38,33 +39,39 @@ jobs:
           }
 
           rc=$(latest cargo-reconverge)
-          [ "$rc" = "$PIN_RECONVERGE" ] || drift="$drift- reconverge: pinned $PIN_RECONVERGE, crates.io has $rc\n"
+          [ "$rc" = "$PIN_RECONVERGE" ] || { drift="$drift- reconverge: pinned $PIN_RECONVERGE, crates.io has $rc\n"; fingerprint="$fingerprint reconverge@$rc"; }
 
           lb=$(latest launchbound-cli)
-          [ "$lb" = "$PIN_LAUNCHBOUND" ] || drift="$drift- launchbound: pinned $PIN_LAUNCHBOUND, crates.io has $lb\n"
+          [ "$lb" = "$PIN_LAUNCHBOUND" ] || { drift="$drift- launchbound: pinned $PIN_LAUNCHBOUND, crates.io has $lb\n"; fingerprint="$fingerprint launchbound@$lb"; }
 
           tl=$(latest termlens)
-          [ "$tl" = "$PIN_TERMLENS" ] || drift="$drift- termlens: pinned $PIN_TERMLENS, crates.io has $tl\n"
+          [ "$tl" = "$PIN_TERMLENS" ] || { drift="$drift- termlens: pinned $PIN_TERMLENS, crates.io has $tl\n"; fingerprint="$fingerprint termlens@$tl"; }
 
           head=$(git ls-remote https://github.com/NVlabs/cuda-oxide HEAD | cut -c1-8)
-          [ "$head" = "$PIN_CUDA_OXIDE" ] || drift="$drift- cuda-oxide: pinned $PIN_CUDA_OXIDE, upstream HEAD is $head\n"
+          [ "$head" = "$PIN_CUDA_OXIDE" ] || { drift="$drift- cuda-oxide: pinned $PIN_CUDA_OXIDE, upstream HEAD is $head\n"; fingerprint="$fingerprint cuda-oxide@$head"; }
 
           {
             echo "drift<<EOF"
             printf '%b' "$drift"
             echo "EOF"
+            echo "fingerprint=${fingerprint# }"
           } >> "$GITHUB_OUTPUT"
 
       - name: Open (or skip) the drift issue
         if: steps.drift.outputs.drift != ''
         env:
           DRIFT: ${{ steps.drift.outputs.drift }}
+          FINGERPRINT: ${{ steps.drift.outputs.fingerprint }}
         run: |
           set -euo pipefail
-          title="pins: upstream moved"
-          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq length)
+          # The fingerprint keys the issue to this exact upstream state, so
+          # a triaged (closed) drift stays closed until upstream moves
+          # AGAIN — otherwise a deliberate keep-the-pin decision would be
+          # re-litigated by a robot every Monday.
+          title="pins: upstream drift — $FINGERPRINT"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "\"$title\" in:title" --json number --jq length)
           if [ "$existing" != "0" ]; then
-            echo "an open drift issue already exists; not duplicating"
+            echo "an issue for this exact drift already exists (open or triaged); not duplicating"
             exit 0
           fi
           {

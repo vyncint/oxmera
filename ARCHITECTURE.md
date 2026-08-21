@@ -19,7 +19,7 @@ oxmera-autograd   reserved: reverse-mode AD (nothing lives here yet)
 oxmera-nn         reserved: layers (nothing lives here yet)
 oxmera-optim      reserved: optimizers (nothing lives here yet)
 oxmera-metal      local execution on Apple Silicon (feature-gated, macOS; not created yet — ADR-0002)
-oxmera-cli        `oxmera doctor` and friends; termlens-tested (lands at O5)
+oxmera-cli        `oxmera doctor` and friends; termlens-tested
 --- separate nightly workspace: research/ ---
 oxmera-cuda       cuda-oxide path (feature-gated, Linux, non-default)
 exercises/*       the exercise ladder
@@ -76,6 +76,17 @@ exercises/*       the exercise ladder
   reserved crates are inside the firewall from birth.
 - Depended on by: nothing yet. Depend on `core` (and later `tensor`/`ops`).
 
+**`oxmera-cli`**
+- Owns: the terminal surface — `oxmera doctor`, its environment probing,
+  and its deterministic rendering contract (no clocks, no absolute paths,
+  fixture-injectable). Pure infrastructure: the one crate allowed to work
+  before the exercises are solved.
+- Must never know about: backend internals; it reads public surfaces and
+  the exercise manifest, nothing deeper. Its goldens run on fixtures,
+  never on probed hardware.
+- Depended on by: nobody — it is a binary (`oxmera`). Depends on `serde`
+  and `toml`; termlens is dev-only.
+
 **`oxmera` (umbrella)**
 - Owns: re-exports only — each layer as a module, the everyday types at
   the root. No logic, permanently.
@@ -103,8 +114,7 @@ A convention is not an enforcement.
 oxmera core targets **stable Rust**. `cuda-oxide` and `reconverge` require a
 pinned nightly. Rather than dragging the whole project onto nightly, the
 GPU/compiler research layer lives in a separate workspace at `research/`
-with its own `rust-toolchain.toml`. (ADR-0003, landing at O1, records the
-alternatives.)
+with its own `rust-toolchain.toml`. (ADR-0003 records the alternatives.)
 
 Consequence, designed for deliberately: `cargo check --workspace
 --all-targets` in the root must succeed on `aarch64-apple-darwin` with no
