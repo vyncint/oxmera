@@ -18,7 +18,7 @@ members = [
 exclude = ["research"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 rust-version = "1.85"
 readme = "README.md"
@@ -33,11 +33,11 @@ toml = "0.9"
 
 # Internal crates. The version field is required so path dependencies
 # survive `cargo publish`.
-oxmera-core = { path = "crates/oxmera-core", version = "0.0.2" }
-oxmera-tensor = { path = "crates/oxmera-tensor", version = "0.0.2" }
-oxmera-ops = { path = "crates/oxmera-ops", version = "0.0.2" }
-oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.0.2" }
-oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.0.2" }
-oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.0.2" }
-oxmera-nn = { path = "crates/oxmera-nn", version = "0.0.2" }
-oxmera-optim = { path = "crates/oxmera-optim", version = "0.0.2" }
+oxmera-core = { path = "crates/oxmera-core", version = "0.0.3" }
+oxmera-tensor = { path = "crates/oxmera-tensor", version = "0.0.3" }
+oxmera-ops = { path = "crates/oxmera-ops", version = "0.0.3" }
+oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.0.3" }
+oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.0.3" }
+oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.0.3" }
+oxmera-nn = { path = "crates/oxmera-nn", version = "0.0.3" }
+oxmera-optim = { path = "crates/oxmera-optim", version = "0.0.3" }
