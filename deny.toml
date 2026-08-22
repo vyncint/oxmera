@@ -40,7 +40,7 @@ multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true
 deny = [
-    # --- launchbound family (crates.io, 1.0.2): a CLI/CI tool, never a dependency ---
+    # --- launchbound family (crates.io, 1.2.0): a CLI/CI tool, never a dependency ---
     { crate = "launchbound-cli", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound-space", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound-bench", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
