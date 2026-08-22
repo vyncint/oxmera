@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PIN_NIGHTLY: nightly-2026-04-03
-      PIN_RECONVERGE: 0.2.0
-      PIN_LAUNCHBOUND: 1.0.2
+      PIN_RECONVERGE: 0.3.0
+      PIN_LAUNCHBOUND: 1.2.0
       PIN_CUDA_OXIDE: a766fc26
-      PIN_TERMLENS: 0.5.0
+      PIN_TERMLENS: 0.6.0
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Compare pins with upstream

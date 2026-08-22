@@ -40,7 +40,7 @@ multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true
 deny = [
-    # --- launchbound family (crates.io, 1.0.2): a CLI/CI tool, never a dependency ---
+    # --- launchbound family (crates.io, 1.2.0): a CLI/CI tool, never a dependency ---
     { crate = "launchbound-cli", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound-space", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound-bench", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
@@ -53,7 +53,7 @@ deny = [
     { crate = "launchbound-tui", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound-runner", reason = "firewall: launchbound is a CLI/CI tool, never a Cargo dependency of any oxmera crate" },
     { crate = "launchbound", reason = "firewall: reserved name, same rule as the rest of the family" },
-    # --- reconverge family (crates.io, 0.2.0): a development tool, never a dependency ---
+    # --- reconverge family (crates.io, 0.3.0): a development tool, never a dependency ---
     { crate = "cargo-reconverge", reason = "firewall: reconverge is a development tool driven from the justfile and CI, never a Cargo dependency" },
     { crate = "reconverge-driver", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },
     { crate = "reconverge-core", reason = "firewall: reconverge is a development tool, never a Cargo dependency" },

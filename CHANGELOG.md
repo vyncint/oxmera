@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] — 2026-08-22
+
+Still a skeleton (see 0.0.1); no change to any crate's API or behaviour.
+
+### Changed
+
+- Tool pins bumped, one per commit, each re-measured: reconverge
+  0.2.0 → **0.3.0**, launchbound 1.0.2 → **1.2.0** (whose internal
+  pairing now matches this project's exactly), termlens 0.5 → **0.6**.
+  Nightly and cuda-oxide unchanged — reconverge 0.3.0 keeps
+  `nightly-2026-04-03` verified against `a766fc26`.
+- `docs/research-baseline.md` replaced with measurements under the new
+  set: pairing verdicts byte-for-byte identical in both directions
+  (clean space admitted, known flip refused with RC001); doctor goldens
+  changed only where the fixture version strings did.
+
 ## [0.0.2] — 2026-08-21
 
 Still a skeleton (see 0.0.1); no functional change to any crate. This
