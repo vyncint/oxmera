@@ -144,7 +144,7 @@ transfer to another.
 | `cuda-oxide` | rev `a766fc26` | rustc codegen backend, Rust → PTX. Kernels are ordinary Rust marked `#[kernel]`. Research workspace only. Cannot build on macOS. |
 | `reconverge` | 0.3.0 | compile-time static verifier for divergent barriers and non-convergent warp ops. Runs as a wrapped `cargo check` — no PTX, no GPU. The correctness gate reachable from a laptop. |
 | `launchbound` | 1.2.0, action `@v1` | convergence-safe autotuner. CLI and CI tool driven from the justfile and GitHub Actions — **never a Cargo dependency**. `prune` needs no GPU. |
-| `termlens` | 0.5.0 | PTY-driving terminal test harness for every terminal surface, starting with `oxmera doctor`. |
+| `termlens` | 0.6.0 | PTY-driving terminal test harness for every terminal surface, starting with `oxmera doctor`. |
 
 The four pins (nightly `nightly-2026-04-03`, reconverge, cuda-oxide,
 launchbound) move together or not at all. See CONTRIBUTING.md for the bump
