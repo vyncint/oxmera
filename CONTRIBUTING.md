@@ -46,7 +46,7 @@ behaviour change riding along:
 | component | current pin |
 |---|---|
 | nightly | `nightly-2026-04-03` |
-| reconverge | 0.2.0 |
+| reconverge | 0.3.0 |
 | cuda-oxide | rev `a766fc26` |
 | launchbound | 1.0.2 / action `@v1` |
 

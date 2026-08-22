@@ -27,7 +27,7 @@ jobs:
           kernel: exercises/b1-first-kernel
           cc: "7.5"
           fail-on: refused
-          reconverge-version: "0.2.0"
+          reconverge-version: "0.3.0"
           toolchain: nightly-2026-04-03
       - name: Show the verdict
         run: |
@@ -47,7 +47,7 @@ jobs:
           kernel: exercises/b2-the-flip
           cc: "7.5"
           fail-on: refused
-          reconverge-version: "0.2.0"
+          reconverge-version: "0.3.0"
           toolchain: nightly-2026-04-03
 
   gate-b3:
@@ -62,7 +62,7 @@ jobs:
           kernel: exercises/b3-shared-memory-cc
           cc: "7.5"
           fail-on: never
-          reconverge-version: "0.2.0"
+          reconverge-version: "0.3.0"
           toolchain: nightly-2026-04-03
       - name: Assert the 80 KiB tile is refused on a T4 budget (once solved)
         env:
@@ -88,5 +88,5 @@ jobs:
           kernel: exercises/b3-shared-memory-cc
           cc: "8.6"
           fail-on: refused
-          reconverge-version: "0.2.0"
+          reconverge-version: "0.3.0"
           toolchain: nightly-2026-04-03
