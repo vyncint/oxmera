@@ -34,4 +34,5 @@ deny:
 research:
     cd research/oxmera-cuda && cargo fmt --all --check
     cd research/oxmera-cuda && cargo check --all-targets
+    cd research/oxmera-cuda && cargo test --release
 
