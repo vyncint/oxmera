@@ -3,9 +3,11 @@
 #
 # Auth: crates.io Trusted Publishing. `id-token: write` lets
 # rust-lang/crates-io-auth-action mint a short-lived registry token from
-# GitHub OIDC. No long-lived registry token exists anywhere — the
-# first-publish token exception ADR-0005 documented was retired right
-# after v0.0.1, as designed.
+# GitHub OIDC. Exception, per ADR-0005: Trusted Publishing cannot CREATE
+# a crate, so when a release introduces a new crate the maintainer sets a
+# temporary CARGO_REGISTRY_TOKEN secret — which, when present, overrides
+# the OIDC token below — then deletes it and configures the new crate's
+# trusted publisher. Steady state is secretless.
 #
 # The tag glob below is defense-in-depth only — in GitHub filter syntax
 # `*` matches any characters, so v1.2.3-rc1 still triggers. The real
@@ -63,7 +65,8 @@ jobs:
 
       - name: Publish every stable-workspace crate, in dependency order
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          # A present secret (new-crate release) beats the OIDC token.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' && secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
         run: |
           set -euo pipefail
           version="${TAG#v}"
