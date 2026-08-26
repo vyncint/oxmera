@@ -1,8 +1,8 @@
 //! The error taxonomy.
 //!
-//! The design rule (exercise A5 refines it): invalid states are
-//! unrepresentable where the type system can afford it, and every
-//! representable failure is typed — no stringly errors on any seam.
+//! The design rule: invalid states are unrepresentable where the type
+//! system can afford it, and every representable failure is typed — no
+//! stringly errors on any seam.
 
 use crate::device::Device;
 use crate::dtype::DType;
@@ -88,10 +88,34 @@ pub enum Error {
         device: Device,
     },
 
-    /// The operation is not implemented yet. The skeleton phase of this
-    /// project returns this nowhere — `todo!()` is used instead so that
-    /// unimplemented paths are loud — but backends need it for genuinely
-    /// unsupported combinations.
+    /// An argument was structurally invalid for the operation.
+    #[error("invalid argument to {op}: {detail}")]
+    InvalidArgument {
+        /// The operation.
+        op: &'static str,
+        /// What was wrong with the argument.
+        detail: String,
+    },
+
+    /// A backend failed internally (driver error, shader compilation, …).
+    #[error("backend failure in {op}: {detail}")]
+    Backend {
+        /// The operation.
+        op: &'static str,
+        /// The backend's own description of the failure.
+        detail: String,
+    },
+
+    /// An I/O failure while loading or saving tensors.
+    #[error("io failure in {op}: {detail}")]
+    Io {
+        /// The operation.
+        op: &'static str,
+        /// The underlying error, rendered.
+        detail: String,
+    },
+
+    /// The operation is not implemented for a combination of inputs.
     #[error("{op} is not implemented for {detail}")]
     NotImplemented {
         /// The operation.

@@ -24,11 +24,15 @@ pub enum DType {
 impl DType {
     /// The size of one element of this type, in bytes.
     pub fn size_in_bytes(self) -> usize {
-        todo!("exercise A1: shape and strides")
+        match self {
+            DType::F32 | DType::I32 => 4,
+            DType::F64 | DType::I64 => 8,
+            DType::U8 | DType::Bool => 1,
+        }
     }
 
     /// Whether this type is a floating-point type.
     pub fn is_float(self) -> bool {
-        todo!("exercise A1: shape and strides")
+        matches!(self, DType::F32 | DType::F64)
     }
 }
