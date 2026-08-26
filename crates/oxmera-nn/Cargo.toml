@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-nn"
-description = "Reserved layer crate for oxmera (nn). Placeholder: nothing lives here yet, by design."
+description = "Neural-network layers for oxmera: Linear, Conv2d, Embedding, LayerNorm, BatchNorm2d, Dropout, Sequential, losses, initializers, and safetensors serialization."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,6 @@ authors.workspace = true
 
 [dependencies]
 oxmera-core.workspace = true
+oxmera-tensor.workspace = true
+rand = "0.9"
+safetensors = "0.6"
