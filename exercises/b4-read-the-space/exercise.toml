@@ -1,7 +1,0 @@
-[exercise]
-id = "b4"
-name = "read the space"
-tier = "B"
-cost = "$0"
-tools = ["launchbound"]
-status = "todo"

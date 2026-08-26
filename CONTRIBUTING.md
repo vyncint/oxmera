@@ -20,15 +20,15 @@ them before opening a PR — they are enforced by CI, not by goodwill.
 - Green `just ci` before pushing — gate on the **exit code**
   (`just ci && git commit -sS …`), never on a pipeline's tail.
 
-## The learning boundary
+## Scope of contributions
 
-The computational parts of oxmera — tensor ops, kernels, autograd, layers,
-optimizers, and **solutions to any exercise** — are the maintainer's to
-write; that is the point of the project. PRs implementing them will be
-declined regardless of quality. PRs improving the room — seams, types,
-tests-as-specs, tooling, CI, docs — are welcome. An exercise test may assert
-properties, invariants, and hand-computed constant cases; it may never
-contain a working implementation of the thing under test.
+The original learning boundary was repealed on 2026-08-22 (ADR-0006): PRs
+implementing functionality are welcome at production quality. Ground rules:
+new ops need tests against the CPU reference and, where differentiable, a
+gradcheck entry; Metal changes need a parity test; terminal changes need a
+golden (blessed from a frame you verified by eye) and must keep the
+determinism contract — no clocks, durations, or absolute paths in
+assertable regions.
 
 ## The dependency firewall
 
