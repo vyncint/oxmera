@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-runtime"
-description = "Dispatch and scheduling seam for oxmera: resolves a device handle to a backend. Skeleton under construction: signatures only."
+description = "Runtime concerns for oxmera: backend registration and initialization, device selection, and the no_grad inference context."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,3 +13,7 @@ authors.workspace = true
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
 oxmera-ops.workspace = true
+oxmera-cpu.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+oxmera-metal.workspace = true

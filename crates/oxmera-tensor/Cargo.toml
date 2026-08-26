@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-tensor"
-description = "The oxmera tensor type: storage ownership, layouts, views. Skeleton under construction: signatures only, no working operations."
+description = "The oxmera tensor: strided zero-copy views, broadcasting, multi-device storage (CPU + Apple Metal), the backend registry, and tape-based reverse-mode autograd."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,12 @@ authors.workspace = true
 
 [dependencies]
 oxmera-core.workspace = true
+rayon = "1"
+rand = "0.9"
+rand_distr = "0.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.33.0"
+
+[dev-dependencies]
+proptest = "1"

@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-ops"
-description = "Operation traits for oxmera backends: signatures only, by design. Skeleton under construction."
+description = "The operation vocabulary oxmera backends implement: unary/binary elementwise, reductions, matmul, and transfer primitives."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

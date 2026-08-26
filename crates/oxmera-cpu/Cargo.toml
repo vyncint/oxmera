@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-cpu"
-description = "The oxmera CPU reference backend: correct, deliberately unoptimized, always available. Skeleton under construction: no operations implemented yet."
+description = "The oxmera CPU backend: rayon-parallel elementwise ops and reductions with cache-tiled matrix multiplication."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,5 +12,3 @@ authors.workspace = true
 [dependencies]
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
-oxmera-ops.workspace = true
-oxmera-runtime.workspace = true
