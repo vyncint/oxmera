@@ -3,9 +3,14 @@
 # TILE*4 + 128 bytes within the 48 KiB *static* shared-memory cap — a
 # static allocation over that cap is invalid on every compute capability
 # (RC004), so an over-cap tile has no business in the space at all.
-# (Measured while building this: reconverge 0.3.0's RC004 only evaluates
-# literal const generics — a named-const size slips past it silently.
-# Reported upstream; until it lands, the cap here is enforced by review.)
+# reconverge 0.4.0 evaluates named-const sizes (vyncint/reconverge#65,
+# fixed), so an over-cap tile here is now refused by the gate — measured:
+# adding 20480 to this list refuses all four of its candidates with RC004.
+#
+# needs_cc = "7.5" is a promise the static gate cannot check: it verifies
+# convergence, not instruction availability. The kernels keep it by using
+# no PTX float intrinsics (cuda-oxide marks them sm_80+); the PTX for
+# sm_75 and sm_86 is assembled with ptxas in the tier-1 container.
 [kernel]
 name = "oxmera-cuda"
 entry = "reduce_sum"

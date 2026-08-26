@@ -5,9 +5,8 @@
 /// Shared-memory stage length (elements) for the reductions — dimension
 /// `tile` in kernel.toml. One block stages `TILE` elements and reduces
 /// them. `TILE * 4 + 128` bytes of static shared memory must stay within
-/// the 48 KiB static cap (RC004) — and note the measured reconverge 0.3.0
-/// gap: RC004 only sees *literal* const generics, so a named-const size
-/// like this one is on the honor system until the upstream fix lands.
+/// the 48 KiB static cap (RC004). reconverge 0.4.0 evaluates this named
+/// const (vyncint/reconverge#65, fixed there); at 20480 it fires RC004.
 pub const TILE: usize = 1024;
 
 /// `#[launch_bounds]` max threads for the 1-D kernels. Must cover every
