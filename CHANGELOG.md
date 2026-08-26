@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-22
+
+The pivot release (ADR-0006): oxmera is now a functioning tensor and
+deep-learning framework. Everything below is new behaviour; 0.0.x was a
+deliberate skeleton.
+
+### Added
+
+- **Tensors:** f32 strided storage with zero-copy views (`reshape`,
+  `permute`, `transpose`, `narrow`, `slice`, `broadcast_to`, `unsqueeze`),
+  NumPy broadcasting, constructors (`zeros`, `ones`, `full`, `randn`,
+  `from_slice`, `from_vec_f32`, `from_vec_i64`), element access, and
+  `std::ops` operator overloading for tensors and scalars.
+- **CPU backend:** rayon-parallel elementwise ops (11 unary, 9 binary with
+  broadcasting), axis reductions, argmax, cache-blocked rank-2 GEMM and
+  batched rank-3 matmul, gather/scatter.
+- **Apple Metal backend:** MSL compute pipelines for strided elementwise,
+  axis reductions, threadgroup-memory full reductions, and 16×16 tiled
+  GEMM over unified-memory buffers; `to_device` moves tensors both ways.
+  CPU↔Metal parity asserted at 1e-5 in on-hardware tests.
+- **Autograd:** tape-based reverse mode — `requires_grad`, `backward()`,
+  gradient accumulation, `detach`, `zero_grad`, `no_grad` RAII guard —
+  with exact VJPs for every primitive and finite-difference gradcheck
+  coverage in CI.
+- **oxmera-nn:** `Module` trait with shared `Param` handles; `Linear`,
+  `Conv2d` (differentiable im2col), `Embedding`, `LayerNorm`,
+  `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`,
+  `BCEWithLogitsLoss`; Kaiming/Xavier initializers; safetensors
+  save/load.
+- **oxmera-optim:** `SGD` (momentum + weight decay), `Adam`, `AdamW`,
+  `RMSprop` — each proven to converge in tests.
+- **CLI:** `oxmera doctor` now reports Apple-Silicon hardware (chip, P/E
+  cores, unified memory, Metal budget) and framework capabilities;
+  `oxmera train` trains a demo model on CPU or Metal with a plain reporter
+  or the `--tui` ratatui dashboard (loss/accuracy sparklines, epoch/batch
+  gauges, throughput, memory) — all golden-tested through a real PTY with
+  100-iteration determinism stress, driven by a deterministic replay mode.
+- `examples/train_mnist.rs` (`--device cpu|metal`), with a synthetic
+  offline fallback dataset.
+
+### Changed
+
+- MSRV raised to 1.88 (measured; forced by ratatui).
+- The exercise ladder was retired; its specs became the integration test
+  suites (ADR-0006).
+- The op traits moved into `oxmera-tensor` (orphan-rule requirement for
+  operator overloading); `oxmera-ops` re-exports the vocabulary; the CPU
+  backend implementation lives in the hub and registers lazily.
+
+
 ## [0.0.3] — 2026-08-22
 
 Still a skeleton (see 0.0.1); no change to any crate's API or behaviour.
