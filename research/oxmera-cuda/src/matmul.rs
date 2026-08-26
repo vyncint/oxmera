@@ -22,8 +22,12 @@ use cuda_device::{
 
 use crate::params::{K, M, MM_THREADS, MT, MT2, N};
 
+/// The GEMM kernel and its generated host loader (`load`).
+// The host-side loader/launcher types `#[cuda_module]` generates carry
+// no docs of their own.
+#[allow(missing_docs)]
 #[cuda_module]
-mod kernels {
+pub mod kernels {
     use super::*;
 
     /// `out[M, N] = a[M, K] x b[K, N]`, row-major, f32.

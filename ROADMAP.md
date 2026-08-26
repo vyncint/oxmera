@@ -32,5 +32,8 @@ standard losses and optimizers, safetensors weights, and the PTY-tested
       unchecked `needs_cc`).
 - [ ] Host runtime integration (`Device::Cuda` backend) — needs the
       cuda-oxide host crates and a Linux toolchain; kernels are ready.
-- [ ] Tier-2 measurement on real hardware (metered sessions, evidence
-      logs); no timing claims until then.
+- [x] Tier-2 correctness on real hardware: parity harness 283/283 and
+      Compute Sanitizer (memcheck, racecheck, synccheck) clean on an
+      A10G, sm_86 — kernels unchanged from 0.1.1.
+- [ ] Tier-2 timings (metered sessions, evidence logs); no performance
+      claims until then. cc 7.5 (T4) execution not yet exercised.

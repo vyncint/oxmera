@@ -68,8 +68,11 @@ fn tanhf(u: f32) -> f32 {
 
 /// A macro would obscure what reconverge analyzes; the eight kernels are
 /// written out so each one's control flow is exactly what is on the page.
+// The host-side loader/launcher types `#[cuda_module]` generates carry
+// no docs of their own.
+#[allow(missing_docs)]
 #[cuda_module]
-mod kernels {
+pub mod kernels {
     use super::*;
 
     /// `out[i] = a[i] + b[i]`.

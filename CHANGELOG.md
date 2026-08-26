@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `research/oxmera-cuda` gains an on-device parity harness
+  (`src/bin/parity.rs`, behind the `hardware` feature, run with
+  `cargo oxide run --features hardware -- --bin parity`): every kernel
+  against an f64 host reference at edge shapes — sizes 1 … 1,000,003,
+  under- and over-provisioned grid-stride launches, mismatched lengths,
+  reductions at `TILE ± 1`, an all-negative padded max window, persistent
+  GEMM grids and a short-output guard. Kernel modules are now `pub` so the
+  generated loaders are reachable.
+
+### Measured
+
+- First on-device run, NVIDIA A10G (sm_86, driver 595.71.05, CUDA 13.2):
+  **283 parity cases, 0 failures**; Compute Sanitizer memcheck 0 errors,
+  racecheck 0 hazards, synccheck 0 errors (quick mode, 227 cases). The
+  kernels are unchanged from 0.1.1; correctness only, no timings.
+
 ## [0.1.1] — 2026-08-26
 
 Toolchain bump and verification release; no framework API changes.

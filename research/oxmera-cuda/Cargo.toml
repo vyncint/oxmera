@@ -21,3 +21,18 @@ authors = ["Vyncint Ng <vyncint@icloud.com>"]
 # require a CUDA toolkit and cannot build on macOS, so they stay out of
 # the graph until a host runtime exists to use them.
 cuda-device = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26" }
+# Host runtime, only behind `hardware`: these need a CUDA toolkit to build
+# and a device to run, so the default (toolkit-free) graph never sees them.
+cuda-core = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26", optional = true }
+cuda-host = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26", optional = true }
+
+[features]
+# Enables the on-device parity harness (`src/bin/parity.rs`). Run on a box
+# with a GPU: `cargo oxide run --features hardware --bin parity`.
+hardware = ["dep:cuda-core", "dep:cuda-host"]
+
+[[bin]]
+name = "parity"
+path = "src/bin/parity.rs"
+required-features = ["hardware"]
+doc = false

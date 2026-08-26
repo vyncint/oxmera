@@ -26,8 +26,12 @@ use crate::params::{LB_MAX, TILE};
 /// Warps per block at the largest supported block size (1024 threads).
 const MAX_WARPS: usize = 32;
 
+/// The reduction kernels and their generated host loader (`load`).
+// The host-side loader/launcher types `#[cuda_module]` generates carry
+// no docs of their own.
+#[allow(missing_docs)]
 #[cuda_module]
-mod kernels {
+pub mod kernels {
     use super::*;
 
     /// Sum of block `b`'s `TILE`-wide window into `out[b]`.
