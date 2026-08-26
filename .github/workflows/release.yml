@@ -117,6 +117,16 @@ jobs:
                 attempt=$((attempt + 1))
                 continue
               fi
+              # An existing crate without a trusted publisher configured
+              # refuses OIDC with 403; fall back to the token once, if
+              # there is one, rather than abandoning the release mid-list.
+              if [ "$tok" = "$OIDC_TOKEN" ] && [ -n "$NEW_CRATE_TOKEN" ] \
+                 && printf '%s' "$out" | grep -qiE "403|forbidden|trusted publish"; then
+                echo "$crate: OIDC refused — retrying once with the registry token"
+                tok="$NEW_CRATE_TOKEN"
+                attempt=$((attempt + 1))
+                continue
+              fi
               echo "::error::$crate failed to publish for a non-retryable reason"
               exit 1
             done
