@@ -21,6 +21,11 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+ignore = [
+    # metal-rs depends on the archived proc-macro `paste`. Compile-time
+    # only, no runtime surface; revisit when metal-rs moves off it.
+    { id = "RUSTSEC-2024-0436", reason = "paste is a build-time proc-macro pulled in by metal-rs; no alternative binding pin available" },
+]
 
 [licenses]
 allow = [
