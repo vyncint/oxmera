@@ -80,11 +80,8 @@ pub fn load(module: &dyn Module, path: impl AsRef<Path>) -> Result<()> {
                 op: "safetensors::load",
             });
         }
-        let data: Vec<f32> = view
-            .data()
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-            .collect();
+        let (chunks, _rest) = view.data().as_chunks::<4>();
+        let data: Vec<f32> = chunks.iter().map(|c| f32::from_le_bytes(*c)).collect();
         param.set(Tensor::from_vec_f32(
             data,
             Shape::new(view.shape().to_vec()),
