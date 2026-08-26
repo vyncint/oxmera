@@ -1,15 +1,25 @@
-//! oxmera-cuda — the CUDA execution path, compiled with `cuda-oxide`.
+//! oxmera-cuda — the CUDA kernels for oxmera's deferred GPU backend,
+//! written as ordinary Rust with `cuda-oxide`'s `#[kernel]`.
 //!
-//! Nothing lives here yet. This crate exists so the nightly research
-//! workspace is real from commit one; the `cuda-oxide` dependency and the
-//! first `#[kernel]` seam arrive with the exercise ladder (tier B).
+//! Everything here is verified on a laptop, with no GPU:
+//! `cargo reconverge check --strict` proves barrier and warp-collective
+//! convergence statically, and `launchbound prune` disqualifies unsafe
+//! launch configurations (per compute capability) before anything would
+//! compile to PTX. Real execution and timings arrive only with metered
+//! tier-2 sessions and are recorded when they happen — never predicted.
 //!
-//! Constraints this crate inherits (see ARCHITECTURE.md):
-//! - pinned nightly, separate workspace — never a member of the stable root;
-//! - kernels cannot be *built* on macOS, but `cargo check` of this workspace
-//!   must stay green on every development machine with no CUDA toolkit;
-//! - the correctness gate is `cargo reconverge check --strict`, which needs
-//!   no GPU. Timings come only from real hardware, and are per-part.
+//! Kernel families:
+//! - [`elementwise`] — grid-stride loops, one disjoint slice walk per
+//!   thread, no barriers by construction;
+//! - [`reduce`] — two-stage reductions: a shared-memory stage tile, warp
+//!   butterfly reductions (`warp::reduce_*_f32`), and uniform
+//!   `sync_threads()` placements only;
+//! - [`matmul`] — persistent-block tiled GEMM with double-buffered
+//!   shared-memory tiles.
 
-#![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod elementwise;
+pub mod matmul;
+pub mod params;
+pub mod reduce;

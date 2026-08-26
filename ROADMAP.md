@@ -17,9 +17,15 @@ standard losses and optimizers, safetensors weights, and the PTY-tested
 - [ ] Model zoo examples: CNN on MNIST/CIFAR, char-level transformer
 - [ ] TUI: multi-run comparison view, gradient-norm panel
 
-## Deferred
+## CUDA (in progress under `research/`)
 
-- [ ] CUDA backend via `cuda-oxide`, gated by `reconverge` and tuned by
-      `launchbound` — the `research/` workspace and the four-pin policy
-      exist for this; it returns when the pairing is measured end to end
-      on real hardware.
+- [x] Kernel set in `research/oxmera-cuda` (issue #10): grid-stride
+      elementwise (add/sub/mul/div/neg/relu/sigmoid/gelu), two-stage
+      staged + warp-butterfly reductions (sum/max), and double-buffered
+      tiled GEMM (16 and 32 tile edges) — `cargo reconverge check
+      --strict` clean and `launchbound prune` fully admitted at cc 7.5
+      and 8.6, enforced in CI by `gate.yml` on plain runners.
+- [ ] Host runtime integration (`Device::Cuda` backend) — needs the
+      cuda-oxide host crates and a Linux toolchain; kernels are ready.
+- [ ] Tier-2 measurement on real hardware (metered sessions, evidence
+      logs); no timing claims until then.

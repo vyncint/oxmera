@@ -1,0 +1,46 @@
+# Launch/specialization space for the reduction kernels: `tile` is the
+# shared-memory stage (dimension TILE in params.rs). Every value keeps
+# TILE*4 + 128 bytes within the 48 KiB *static* shared-memory cap — a
+# static allocation over that cap is invalid on every compute capability
+# (RC004), so an over-cap tile has no business in the space at all.
+# (Measured while building this: reconverge 0.3.0's RC004 only evaluates
+# literal const generics — a named-const size slips past it silently.
+# Reported upstream; until it lands, the cap here is enforced by review.)
+[kernel]
+name = "oxmera-cuda"
+entry = "reduce_sum"
+domain = 1
+needs_cc = "7.5"
+known = "stable"
+
+[dims.block_x]
+values = [32, 64, 128, 256]
+
+[dims.tile]
+role = "spec"
+values = [1024, 4096, 8192]
+
+[constraints]
+exprs = ["tile % block_x == 0"]
+
+[bench]
+elements = 1048576
+grid_x = "elements / tile"
+
+# PTX ABI: &[f32] -> ptr,len; DisjointSlice<f32> -> ptr,len.
+[[bench.args]]
+kind = "in_f32"
+len = "elements"
+[[bench.args]]
+kind = "len_of"
+of = 0
+[[bench.args]]
+kind = "out_f32"
+len = "elements / tile"
+[[bench.args]]
+kind = "len_of"
+of = 2
+
+[model]
+# The stage tile plus the 32-slot warp-partials array.
+smem_bytes = "tile * 4 + 128"

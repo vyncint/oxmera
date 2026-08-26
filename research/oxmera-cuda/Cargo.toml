@@ -1,11 +1,23 @@
 [package]
 name = "oxmera-cuda"
-description = "The cuda-oxide execution path for oxmera. Placeholder: nothing lives here yet."
+description = "The cuda-oxide kernel crate for oxmera: elementwise grid-stride, staged warp-synchronous reductions, and double-buffered tiled GEMM. Deferred backend; verified by reconverge and pruned by launchbound, no GPU required."
 publish = false
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-authors.workspace = true
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vyncint/oxmera"
+authors = ["Vyncint Ng <vyncint@icloud.com>"]
+
+# Standalone on purpose: launchbound copies this crate into a scratch
+# directory per tuning candidate, and a parent workspace would capture
+# those copies and refuse to build them. The empty table keeps the crate
+# (and every copy of it) self-contained.
+[workspace]
 
 [dependencies]
+# The four-pin contract (CONTRIBUTING.md): this rev is what reconverge
+# 0.3.0 records as verified, on nightly-2026-04-03. `cuda-device` is the
+# only dependency kernels need; the host-side crates (cuda-core et al.)
+# require a CUDA toolkit and cannot build on macOS, so they stay out of
+# the graph until a host runtime exists to use them.
+cuda-device = { git = "https://github.com/NVlabs/cuda-oxide", rev = "a766fc26" }

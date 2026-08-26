@@ -32,6 +32,6 @@ deny:
 # no GPU, no CUDA toolkit required. rustup installs the pinned nightly
 # from research/rust-toolchain.toml on first use.
 research:
-    cd research && cargo fmt --all --check
-    cd research && cargo check --workspace --all-targets
+    cd research/oxmera-cuda && cargo fmt --all --check
+    cd research/oxmera-cuda && cargo check --all-targets
 

@@ -20,8 +20,8 @@ jobs:
       - name: Pinned nightly from research/rust-toolchain.toml
         run: rustup toolchain install nightly-2026-04-03 --profile minimal --component rustfmt,clippy,rust-src
       - name: Format
-        working-directory: research
+        working-directory: research/oxmera-cuda
         run: cargo fmt --all --check
       - name: Check
-        working-directory: research
-        run: cargo check --workspace --all-targets
+        working-directory: research/oxmera-cuda
+        run: cargo check --all-targets

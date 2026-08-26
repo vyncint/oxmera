@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `research/oxmera-cuda` (issue #10): production cuda-oxide kernels —
+  grid-stride elementwise ops, staged warp-synchronous tree reductions,
+  and double-buffered shared-memory tiled GEMM — statically verified by
+  `reconverge check --strict` (0 findings, both compute capabilities) and
+  a fully-admitted `launchbound prune` space, enforced in CI by the
+  revived `gate.yml` with no GPU anywhere.
+
+### Changed
+
+- termlens 0.6 → 0.6.1; both PTY golden suites and their 100-iteration
+  stresses pass unchanged.
+- The kernel crate is standalone (own `[workspace]`) so launchbound's
+  per-candidate scratch copies resolve; the old `research/` virtual
+  workspace manifest is gone.
+
+### Known upstream
+
+- reconverge 0.3.0's RC004 does not evaluate named-const `SharedArray`
+  sizes (filed as vyncint/reconverge#65); the kernel.toml space keeps
+  every tile within the 48 KiB static cap by review until that lands.
+
 ## [0.1.0] — 2026-08-22
 
 The pivot release (ADR-0006): oxmera is now a functioning tensor and
