@@ -1,32 +1,29 @@
-size: 100x45  cursor: 31,0
+size: 100x45  cursor: 28,0
 oxmera doctor
 =============
 
 host: macos / aarch64
+  chip         Apple M3 Pro (fixture)
+  cpu cores    11 (5 performance + 6 efficiency)
+  memory       36.0 GB unified
 
 toolchain
   rustc        rustc 1.97.1 (fixture)
   cargo        cargo 1.97.1 (fixture)
-  just         just 1.58.0
-  reconverge   cargo-reconverge 0.3.0
-  launchbound  launchbound 1.2.0
-  container    yes
 
-tiers
-  tier 0  edit / check / CPU backend        available
-  tier 0  convergence gate (reconverge)     available
-  tier 1  container PTX (cargo oxide)       available
-  tier 2  NVIDIA execution                  metered — approved GPU sessions only
+devices
+  cpu     available — 11 threads (rayon)
+  metal   Apple M3 Pro (fixture) — unified memory budget 27.0 GB
+  cuda    deferred — no backend in this build
 
-backend paths
-  cpu     always available — the correctness ground truth
-  metal   plausible on this host  (no convergence gate exists on this path)
-  cuda    no toolkit here — tier 1/2 territory  (verdicts and timings are per-part)
+capabilities
+  tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer
+  autograd  reverse-mode tape, finite-difference verified
+  nn        Linear Conv2d Embedding LayerNorm BatchNorm2d Dropout Sequential
+  losses    MSE CrossEntropy BCEWithLogits
+  optim     SGD Adam AdamW RMSprop
+  weights   safetensors save/load
 
-exercise ladder
-  1 solved, 1 todo, 1 planned
-  [x] a1   shape and strides
-  [ ] a4   the reference matmul
-  [.] c1   Metal elementwise
+try: `oxmera train --tui` — the live training dashboard
 
 doctor: report complete

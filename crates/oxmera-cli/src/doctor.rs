@@ -1,5 +1,6 @@
 //! Rendering the doctor report. Deterministic by contract: the same
-//! `Report` always prints the same bytes.
+//! `Report` always prints the same bytes — no clocks, no durations, no
+//! absolute paths.
 
 use crate::probe;
 use crate::report::Report;
@@ -16,10 +17,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     print!("{}", render(&report));
     Ok(())
-}
-
-fn yes_no(present: bool) -> &'static str {
-    if present { "yes" } else { "no" }
 }
 
 fn tool_line(name: &str, version: &Option<String>) -> String {
@@ -39,98 +36,63 @@ fn render(r: &Report) -> String {
     line("oxmera doctor".into());
     line("=============".into());
     line(String::new());
+
     line(format!("host: {} / {}", r.os, r.arch));
+    if let Some(chip) = &r.host.chip {
+        line(format!("  {:<12} {chip}", "chip"));
+    }
+    match (r.host.p_cores, r.host.e_cores) {
+        (Some(p), Some(e)) => {
+            line(format!(
+                "  {:<12} {} ({p} performance + {e} efficiency)",
+                "cpu cores",
+                p + e
+            ));
+        }
+        _ => line(format!("  {:<12} {}", "cpu cores", r.devices.cpu_threads)),
+    }
+    if let Some(gb) = r.host.memory_gb {
+        line(format!("  {:<12} {gb:.1} GB unified", "memory"));
+    }
     line(String::new());
 
     line("toolchain".into());
     line(tool_line("rustc", &r.toolchain.rustc));
     line(tool_line("cargo", &r.toolchain.cargo));
-    line(tool_line("just", &r.toolchain.just));
-    line(tool_line("reconverge", &r.toolchain.reconverge));
-    line(tool_line("launchbound", &r.toolchain.launchbound));
-    line(format!(
-        "  {:<12} {}",
-        "container",
-        yes_no(r.toolchain.container)
-    ));
     line(String::new());
 
-    let tier0 = r.toolchain.rustc.is_some() && r.toolchain.cargo.is_some();
-    let tier0_gate = tier0 && r.toolchain.reconverge.is_some();
-    line("tiers".into());
+    line("devices".into());
     line(format!(
-        "  tier 0  edit / check / CPU backend        {}",
-        if tier0 {
-            "available"
-        } else {
-            "MISSING rustc/cargo"
-        }
+        "  cpu     available — {} threads (rayon)",
+        r.devices.cpu_threads
     ));
-    line(format!(
-        "  tier 0  convergence gate (reconverge)     {}",
-        if tier0_gate {
-            "available"
-        } else {
-            "install cargo-reconverge + reconverge-driver"
+    if r.devices.metal {
+        let name = r.devices.metal_name.as_deref().unwrap_or("Metal device");
+        match r.devices.metal_budget_gb {
+            Some(gb) => line(format!(
+                "  metal   {name} — unified memory budget {gb:.1} GB"
+            )),
+            None => line(format!("  metal   {name}")),
         }
-    ));
-    line(format!(
-        "  tier 1  container PTX (cargo oxide)       {}",
-        if r.toolchain.container {
-            "available"
-        } else {
-            "no container runtime found"
-        }
-    ));
-    line("  tier 2  NVIDIA execution                  metered — approved GPU sessions only".into());
-    line(String::new());
-
-    line("backend paths".into());
-    line("  cpu     always available — the correctness ground truth".into());
-    line(format!(
-        "  metal   {}  (no convergence gate exists on this path)",
-        if r.gpu.metal {
-            "plausible on this host"
-        } else {
-            "not on this host"
-        }
-    ));
-    line(format!(
-        "  cuda    {}  (verdicts and timings are per-part)",
-        if r.gpu.cuda {
-            "toolkit visible"
-        } else {
-            "no toolkit here — tier 1/2 territory"
-        }
-    ));
-    line(String::new());
-
-    line("exercise ladder".into());
-    if !r.ladder_found {
-        line("  no exercises/manifest.toml found from here".into());
     } else {
-        let solved = r.ladder.iter().filter(|x| x.status == "solved").count();
-        let todo = r.ladder.iter().filter(|x| x.status == "todo").count();
-        let planned = r.ladder.iter().filter(|x| x.status == "planned").count();
-        line(format!("  {solved} solved, {todo} todo, {planned} planned"));
-        for rung in &r.ladder {
-            line(format!(
-                "  [{}] {:<4} {}",
-                status_mark(&rung.status),
-                rung.id,
-                rung.name
-            ));
-        }
+        line("  metal   not available on this host".into());
     }
+    line("  cuda    deferred — no backend in this build".into());
+    line(String::new());
+
+    line("capabilities".into());
+    line(
+        "  tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer".into(),
+    );
+    line("  autograd  reverse-mode tape, finite-difference verified".into());
+    line("  nn        Linear Conv2d Embedding LayerNorm BatchNorm2d Dropout Sequential".into());
+    line("  losses    MSE CrossEntropy BCEWithLogits".into());
+    line("  optim     SGD Adam AdamW RMSprop".into());
+    line("  weights   safetensors save/load".into());
+    line(String::new());
+
+    line("try: `oxmera train --tui` — the live training dashboard".into());
     line(String::new());
     line("doctor: report complete".into());
     out
-}
-
-fn status_mark(status: &str) -> &'static str {
-    match status {
-        "solved" => "x",
-        "todo" => " ",
-        _ => ".",
-    }
 }

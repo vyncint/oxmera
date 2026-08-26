@@ -1,6 +1,6 @@
 [package]
 name = "oxmera"
-description = "A Rust-native ML/GPU computing framework built from first principles as a learning project. Skeleton under construction: no working operations yet."
+description = "A Rust-native tensor and deep-learning framework: multi-threaded CPU and Apple Metal backends, reverse-mode autograd, NN layers, optimizers, safetensors, and a PTY-tested terminal UI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,3 +15,9 @@ oxmera-tensor.workspace = true
 oxmera-ops.workspace = true
 oxmera-runtime.workspace = true
 oxmera-cpu.workspace = true
+oxmera-autograd.workspace = true
+oxmera-nn.workspace = true
+oxmera-optim.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+oxmera-metal.workspace = true

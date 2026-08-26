@@ -1,33 +1,28 @@
-size: 100x45  cursor: 32,0
+size: 100x45  cursor: 27,0
 oxmera doctor
 =============
 
 host: linux / x86_64
+  cpu cores    4
+  memory       16.0 GB unified
 
 toolchain
   rustc        rustc 1.97.1 (fixture)
   cargo        cargo 1.97.1 (fixture)
-  just         just 1.58.0
-  reconverge   not found
-  launchbound  not found
-  container    no
 
-tiers
-  tier 0  edit / check / CPU backend        available
-  tier 0  convergence gate (reconverge)     install cargo-reconverge + reconverge-driver
-  tier 1  container PTX (cargo oxide)       no container runtime found
-  tier 2  NVIDIA execution                  metered — approved GPU sessions only
+devices
+  cpu     available — 4 threads (rayon)
+  metal   not available on this host
+  cuda    deferred — no backend in this build
 
-backend paths
-  cpu     always available — the correctness ground truth
-  metal   not on this host  (no convergence gate exists on this path)
-  cuda    no toolkit here — tier 1/2 territory  (verdicts and timings are per-part)
+capabilities
+  tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer
+  autograd  reverse-mode tape, finite-difference verified
+  nn        Linear Conv2d Embedding LayerNorm BatchNorm2d Dropout Sequential
+  losses    MSE CrossEntropy BCEWithLogits
+  optim     SGD Adam AdamW RMSprop
+  weights   safetensors save/load
 
-exercise ladder
-  0 solved, 3 todo, 1 planned
-  [ ] a1   shape and strides
-  [ ] a4   the reference matmul
-  [ ] b2   the flip — be caught by RC001
-  [.] c1   Metal elementwise
+try: `oxmera train --tui` — the live training dashboard
 
 doctor: report complete

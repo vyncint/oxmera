@@ -1,0 +1,36 @@
+# A recorded training run for the deterministic dashboard replay: values
+# hand-picked so every widget shows non-trivial state. No clocks anywhere.
+device = "metal"
+model = "mlp 2-32-32-2"
+batches_per_epoch = 8
+memory = "1.2 / 27.0 GB unified"
+
+[[epoch]]
+loss = 0.9302
+accuracy = 0.586
+throughput = 5125.0
+
+[[epoch]]
+loss = 0.7258
+accuracy = 0.617
+throughput = 5719.0
+
+[[epoch]]
+loss = 0.6693
+accuracy = 0.648
+throughput = 5741.0
+
+[[epoch]]
+loss = 0.5121
+accuracy = 0.766
+throughput = 5802.0
+
+[[epoch]]
+loss = 0.3410
+accuracy = 0.891
+throughput = 5811.0
+
+[[epoch]]
+loss = 0.2005
+accuracy = 0.953
+throughput = 5790.0

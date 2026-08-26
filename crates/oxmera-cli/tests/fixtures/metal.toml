@@ -1,32 +1,19 @@
-# Environment shape 2: an Apple-Silicon dev machine with the whole $0
-# stack — Metal path plausible, gate tools installed, container runtime up.
+# Environment shape 2: an Apple-Silicon dev machine with Metal.
 os = "macos"
 arch = "aarch64"
-ladder_found = true
+
+[host]
+chip = "Apple M3 Pro (fixture)"
+p_cores = 5
+e_cores = 6
+memory_gb = 36.0
 
 [toolchain]
 rustc = "rustc 1.97.1 (fixture)"
 cargo = "cargo 1.97.1 (fixture)"
-just = "just 1.58.0"
-reconverge = "cargo-reconverge 0.3.0"
-launchbound = "launchbound 1.2.0"
-container = true
 
-[gpu]
+[devices]
+cpu_threads = 11
 metal = true
-cuda = false
-
-[[ladder]]
-id = "a1"
-name = "shape and strides"
-status = "solved"
-
-[[ladder]]
-id = "a4"
-name = "the reference matmul"
-status = "todo"
-
-[[ladder]]
-id = "c1"
-name = "Metal elementwise"
-status = "planned"
+metal_name = "Apple M3 Pro (fixture)"
+metal_budget_gb = 27.0

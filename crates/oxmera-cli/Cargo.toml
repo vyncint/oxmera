@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-cli"
-description = "The oxmera terminal surface: `oxmera doctor` reports toolchain, tier availability, and ladder progress. Skeleton framework, real doctor."
+description = "The oxmera terminal surface: `oxmera doctor` hardware/capability reports and `oxmera train --tui`, the live training dashboard, PTY-tested with termlens."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,6 +17,9 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+oxmera.workspace = true
+crossterm = "0.29"
+ratatui = "0.30.0"
 serde.workspace = true
 toml.workspace = true
 

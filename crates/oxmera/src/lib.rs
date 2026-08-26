@@ -1,26 +1,35 @@
-//! oxmera — a Rust-native machine-learning and GPU-computing framework
-//! built from first principles, in the open, as a learning project that
-//! does not lie about what it is.
+//! oxmera — a Rust-native tensor and deep-learning framework with
+//! multi-threaded CPU and Apple-Silicon Metal backends, reverse-mode
+//! autograd, neural-network layers, optimizers, and a terminal UI.
 //!
-//! This is the umbrella crate: it re-exports the public surface of the
-//! oxmera workspace and contains no logic of its own, permanently. The
-//! layer crates are re-exported as modules; the most common types are also
-//! re-exported at the root.
+//! This umbrella crate re-exports the public surface of the workspace and
+//! links every backend for the current platform, so `use oxmera::*`-style
+//! consumers get working devices with no setup:
 //!
-//! Status: skeleton under construction. Every operation body is `todo!()`
-//! — the implementations are the maintainer's exercise ladder, and no
-//! computation works yet. See the repository README for what this project
-//! deliberately is and is not.
+//! ```
+//! use oxmera::{Device, Tensor};
+//!
+//! let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], [2, 2]).unwrap();
+//! let b = Tensor::from_slice(&[5.0, 6.0, 7.0, 8.0], [2, 2]).unwrap();
+//! let c = a.matmul(&b).unwrap();
+//! assert_eq!(c.get_f32(&[0, 0]).unwrap(), 19.0);
+//! assert_eq!(c.device(), Device::Cpu);
+//! ```
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub use oxmera_autograd as autograd;
 pub use oxmera_core as core;
 pub use oxmera_cpu as cpu;
+#[cfg(target_os = "macos")]
+pub use oxmera_metal as metal;
+pub use oxmera_nn as nn;
 pub use oxmera_ops as ops;
+pub use oxmera_optim as optim;
 pub use oxmera_runtime as runtime;
 pub use oxmera_tensor as tensor;
 
 pub use oxmera_core::{DType, Device, Error, Layout, Result, Shape, Strides};
-pub use oxmera_runtime::{Backend, TensorOps};
-pub use oxmera_tensor::{Storage, Tensor};
+pub use oxmera_runtime::{default_device, init, no_grad};
+pub use oxmera_tensor::{Backend, NoGradGuard, Storage, Tensor};
