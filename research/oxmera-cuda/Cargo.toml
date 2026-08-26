@@ -2,7 +2,7 @@
 name = "oxmera-cuda"
 description = "The cuda-oxide kernel crate for oxmera: elementwise grid-stride, staged warp-synchronous reductions, and double-buffered tiled GEMM. Deferred backend; verified by reconverge and pruned by launchbound, no GPU required."
 publish = false
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vyncint/oxmera"

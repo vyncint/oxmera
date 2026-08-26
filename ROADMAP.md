@@ -25,6 +25,11 @@ standard losses and optimizers, safetensors weights, and the PTY-tested
       tiled GEMM (16 and 32 tile edges) — `cargo reconverge check
       --strict` clean and `launchbound prune` fully admitted at cc 7.5
       and 8.6, enforced in CI by `gate.yml` on plain runners.
+- [x] PTX for `sm_75` and `sm_86` assembled with `ptxas` in the tier-1
+      container (0.1.1); every kernel free of `sm_80+`-only intrinsics so
+      `needs_cc = "7.5"` holds. Gate pair: reconverge 0.4.0 / launchbound
+      2.0.0 (RC004 named-const fix verified; launchbound#32 filed for the
+      unchecked `needs_cc`).
 - [ ] Host runtime integration (`Device::Cuda` backend) — needs the
       cuda-oxide host crates and a Linux toolchain; kernels are ready.
 - [ ] Tier-2 measurement on real hardware (metered sessions, evidence

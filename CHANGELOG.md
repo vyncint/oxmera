@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-26
+
+Toolchain bump and verification release; no framework API changes.
+
 ### Added
 
 - `research/oxmera-cuda` (issue #10): production cuda-oxide kernels —
@@ -18,17 +22,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Pins:** reconverge 0.3.0 → 0.4.0 and launchbound 1.2.0 → 2.0.0
+  (action `@v2`, SHA-pinned), moved together per the pin policy; nightly,
+  cuda-oxide and termlens unchanged. 0.4.0 fixes vyncint/reconverge#65
+  (named-const `SharedArray` sizes now counted by RC004) — verified here:
+  an 80 KiB named-const tile is `2 deny` and launchbound refuses all four
+  of its candidates, where the previous pair admitted them.
+- `vec_sigmoid`/`vec_gelu` use plain-arithmetic `exp`/`tanh` instead of
+  cuda-oxide's `ex2.approx`/`tanh.approx` intrinsics, which the catalog
+  marks `sm_80+`: the crate did not lower for `sm_75` even though
+  `kernel.toml` promised `needs_cc = "7.5"`. PTX for both `sm_75` and
+  `sm_86` now assembles under `ptxas` (CUDA 13.2). Host-side accuracy
+  tests bound the helpers (`exp` ≤ 4e-7 relative; sigmoid/GELU within
+  1e-5 of `std`); `just research` runs them.
+- `docs/research-baseline.md` re-measured on the new pair.
 - termlens 0.6 → 0.6.1; both PTY golden suites and their 100-iteration
   stresses pass unchanged.
 - The kernel crate is standalone (own `[workspace]`) so launchbound's
   per-candidate scratch copies resolve; the old `research/` virtual
   workspace manifest is gone.
 
+### Fixed upstream
+
+- vyncint/reconverge#65 (RC004 blind to named-const `SharedArray` sizes,
+  found while building the gate) is fixed in reconverge 0.4.0 and
+  verified here as described above.
+
 ### Known upstream
 
-- reconverge 0.3.0's RC004 does not evaluate named-const `SharedArray`
-  sizes (filed as vyncint/reconverge#65); the kernel.toml space keeps
-  every tile within the 48 KiB static cap by review until that lands.
+- vyncint/launchbound#32: `prune --cc` cannot see instruction
+  availability, so `needs_cc` is taken on trust; filed with the
+  reproduction above.
+
+### Not done
+
+- No kernel has executed on NVIDIA hardware yet; runtime parity and
+  timings are tier-2 work and are not claimed.
 
 ## [0.1.0] — 2026-08-22
 
