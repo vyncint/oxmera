@@ -14,13 +14,19 @@ mod tui;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: oxmera <doctor [--fixture <path>] | train [--device cpu|metal] [--epochs N] [--tui] [--replay <path>] | --version>";
+const USAGE: &str = "usage: oxmera <doctor [--fixture <path>] | train [--device cpu|metal] [--epochs N] [--tui] [--replay <path>] | --version | --help>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--version" | "-V") => {
             println!("oxmera {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
+        // An explicit request for help is a success on stdout; only an
+        // unknown or missing subcommand is usage-on-stderr + exit 1.
+        Some("--help" | "-h" | "help") => {
+            println!("{USAGE}");
             ExitCode::SUCCESS
         }
         Some("doctor") => report_outcome("doctor", doctor::run(&args[1..])),
