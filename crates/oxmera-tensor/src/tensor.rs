@@ -50,7 +50,8 @@ impl Tensor {
     /// A contiguous CPU tensor holding `data` with shape `shape`.
     ///
     /// Errors when `data.len()` does not equal `shape.numel()`.
-    pub fn from_vec_f32(data: Vec<f32>, shape: Shape) -> Result<Self> {
+    pub fn from_vec_f32(data: Vec<f32>, shape: impl Into<Shape>) -> Result<Self> {
+        let shape = shape.into();
         if data.len() != shape.numel() {
             return Err(Error::ShapeMismatch {
                 expected: Shape::from([data.len()]),
@@ -67,11 +68,12 @@ impl Tensor {
 
     /// A contiguous CPU tensor copying `data` with shape `shape`.
     pub fn from_slice(data: &[f32], shape: impl Into<Shape>) -> Result<Self> {
-        Self::from_vec_f32(data.to_vec(), shape.into())
+        Self::from_vec_f32(data.to_vec(), shape)
     }
 
     /// A contiguous CPU `I64` tensor holding `data` (indices, targets).
-    pub fn from_vec_i64(data: Vec<i64>, shape: Shape) -> Result<Self> {
+    pub fn from_vec_i64(data: Vec<i64>, shape: impl Into<Shape>) -> Result<Self> {
+        let shape = shape.into();
         if data.len() != shape.numel() {
             return Err(Error::ShapeMismatch {
                 expected: Shape::from([data.len()]),
