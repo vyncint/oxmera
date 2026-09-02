@@ -113,7 +113,15 @@ impl Backend for CpuBackend {
         let kept_dims: Vec<usize> = kept.iter().map(|&ax| dims[ax]).collect();
 
         let out_numel: usize = out_dims.iter().product();
+        // A reduced extent of 0 has nothing to combine: every output is
+        // the identity (sum → 0, max → -inf, min → +inf). The odometer
+        // below is do-while shaped and would read one element that does
+        // not exist (issue #18).
+        let empty_reduce = reduced_dims.iter().any(|&d| d == 0);
         let reduce_one = |out_i: usize| -> f32 {
+            if empty_reduce {
+                return op.identity();
+            }
             // Decompose out_i over the kept dims to a base offset.
             let mut rem = out_i;
             let mut offset = base as isize;
@@ -162,6 +170,14 @@ impl Backend for CpuBackend {
         let kept_strides: Vec<isize> = kept.iter().map(|&ax| strides[ax]).collect();
         let kept_dims: Vec<usize> = kept.iter().map(|&ax| dims[ax]).collect();
         let (n, s) = (dims[dim], strides[dim]);
+        if n == 0 {
+            // There is no element to point at; fabricating index 0 would
+            // send callers out of bounds downstream.
+            return Err(Error::InvalidArgument {
+                op: "argmax",
+                detail: format!("dimension {dim} has extent 0; argmax of nothing is undefined"),
+            });
+        }
 
         let out_numel: usize = out_dims.iter().product();
         let out: Vec<i64> = (0..out_numel)
