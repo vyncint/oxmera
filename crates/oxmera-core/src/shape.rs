@@ -30,8 +30,9 @@ impl Shape {
     ///
     /// A scalar has 1 element; any zero-sized dimension makes this 0.
     pub fn numel(&self) -> usize {
-        self.checked_numel()
-            .expect("shape element count overflows usize — reject the shape before it becomes a tensor")
+        self.checked_numel().expect(
+            "shape element count overflows usize — reject the shape before it becomes a tensor",
+        )
     }
 
     /// Total number of elements, or `None` when the product of the
@@ -43,12 +44,9 @@ impl Shape {
     /// `data.len() == numel` check (a reported class of bug); with the
     /// check, such a shape is a typed error instead.
     pub fn checked_numel(&self) -> Option<usize> {
-        self.0
-            .iter()
-            .try_fold(1usize, |acc, &d| acc.checked_mul(d))
+        self.0.iter().try_fold(1usize, |acc, &d| acc.checked_mul(d))
     }
 }
-
 
 impl From<&[usize]> for Shape {
     fn from(dims: &[usize]) -> Self {
@@ -110,7 +108,10 @@ mod tests {
 
     #[test]
     fn checked_numel_is_none_on_overflow() {
-        assert_eq!(Shape::from([1usize << 32, 1usize << 32]).checked_numel(), None);
+        assert_eq!(
+            Shape::from([1usize << 32, 1usize << 32]).checked_numel(),
+            None
+        );
         assert_eq!(Shape::from([usize::MAX, 2]).checked_numel(), None);
     }
 
