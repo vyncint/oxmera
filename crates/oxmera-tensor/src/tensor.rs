@@ -52,7 +52,8 @@ impl Tensor {
     /// Errors when `data.len()` does not equal `shape.numel()`.
     pub fn from_vec_f32(data: Vec<f32>, shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
-        if data.len() != shape.numel() {
+        let numel = checked_numel(&shape, "Tensor::from_vec_f32")?;
+        if data.len() != numel {
             return Err(Error::ShapeMismatch {
                 expected: Shape::from([data.len()]),
                 got: shape,
@@ -74,7 +75,8 @@ impl Tensor {
     /// A contiguous CPU `I64` tensor holding `data` (indices, targets).
     pub fn from_vec_i64(data: Vec<i64>, shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
-        if data.len() != shape.numel() {
+        let numel = checked_numel(&shape, "Tensor::from_vec_i64")?;
+        if data.len() != numel {
             return Err(Error::ShapeMismatch {
                 expected: Shape::from([data.len()]),
                 got: shape,
@@ -216,7 +218,7 @@ impl Tensor {
     /// elements in a new shape.
     pub fn reshape(&self, shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
-        if shape.numel() != self.numel() {
+        if checked_numel(&shape, "reshape")? != self.numel() {
             return Err(Error::ShapeMismatch {
                 expected: self.shape().clone(),
                 got: shape,
@@ -332,6 +334,7 @@ impl Tensor {
     /// A zero-copy broadcast view to `shape` (stride 0 on expanded axes).
     pub fn broadcast_to(&self, shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
+        checked_numel(&shape, "broadcast_to")?;
         let layout = broadcast_layout(&self.layout, &shape)?;
         let out = self.view(layout);
         Ok(crate::ops::record_view(self, out, ViewKind::Broadcast))
@@ -340,6 +343,7 @@ impl Tensor {
     /// A broadcast view that records nothing on the tape — backend
     /// plumbing; prefer [`Tensor::broadcast_to`] in user code.
     pub fn broadcast_view(&self, shape: &Shape) -> Result<Self> {
+        checked_numel(shape, "broadcast_view")?;
         let layout = broadcast_layout(&self.layout, shape)?;
         Ok(self.view(layout))
     }
@@ -639,4 +643,13 @@ pub(crate) fn gather_logical<T: Copy>(src: &[T], layout: &Layout) -> Vec<T> {
             return out;
         }
     }
+}
+
+/// The element count of a caller-supplied shape, or a typed error when it
+/// does not fit in `usize` (see [`Shape::checked_numel`]).
+fn checked_numel(shape: &Shape, op: &'static str) -> Result<usize> {
+    shape.checked_numel().ok_or_else(|| Error::InvalidArgument {
+        op,
+        detail: format!("shape {:?} has more elements than fit in usize", shape.dims()),
+    })
 }

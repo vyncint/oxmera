@@ -30,9 +30,25 @@ impl Shape {
     ///
     /// A scalar has 1 element; any zero-sized dimension makes this 0.
     pub fn numel(&self) -> usize {
-        self.0.iter().product()
+        self.checked_numel()
+            .expect("shape element count overflows usize — reject the shape before it becomes a tensor")
+    }
+
+    /// Total number of elements, or `None` when the product of the
+    /// dimensions does not fit in `usize`.
+    ///
+    /// Every constructor that accepts a caller-supplied shape validates
+    /// with this before allocating: a wrapped product would let a shape
+    /// claim 2^64 elements over an empty buffer and pass the
+    /// `data.len() == numel` check (a reported class of bug); with the
+    /// check, such a shape is a typed error instead.
+    pub fn checked_numel(&self) -> Option<usize> {
+        self.0
+            .iter()
+            .try_fold(1usize, |acc, &d| acc.checked_mul(d))
     }
 }
+
 
 impl From<&[usize]> for Shape {
     fn from(dims: &[usize]) -> Self {
@@ -79,4 +95,28 @@ pub fn broadcast_shapes(lhs: &Shape, rhs: &Shape) -> Result<Shape> {
         };
     }
     Ok(Shape(out))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Shape;
+
+    #[test]
+    fn checked_numel_matches_numel_when_it_fits() {
+        assert_eq!(Shape::from([2, 3, 4]).checked_numel(), Some(24));
+        assert_eq!(Shape::from([0, 3]).checked_numel(), Some(0));
+        assert_eq!(Shape::new(vec![]).checked_numel(), Some(1));
+    }
+
+    #[test]
+    fn checked_numel_is_none_on_overflow() {
+        assert_eq!(Shape::from([1usize << 32, 1usize << 32]).checked_numel(), None);
+        assert_eq!(Shape::from([usize::MAX, 2]).checked_numel(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "overflows usize")]
+    fn numel_refuses_to_wrap_silently() {
+        let _ = Shape::from([1usize << 32, 1usize << 32]).numel();
+    }
 }
