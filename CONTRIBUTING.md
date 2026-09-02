@@ -33,8 +33,10 @@ assertable regions.
 ## The dependency firewall
 
 No crate in the stable workspace may depend, directly or transitively, on
-`cuda-oxide`, `reconverge`, or `launchbound`. `deny.toml` bans them and CI
-fails on violations. Adding any dependency to a firewalled crate needs a
+`cuda-oxide`, `reconverge`, or `launchbound` — the research CUDA toolchain
+under `research/oxmera-cuda-oxide`. `deny.toml` bans them and CI fails on
+violations. The shipped CUDA backend reaches the driver through `cudarc`,
+which is not in those families. Adding any dependency to a firewalled crate needs a
 maintainer's explicit sign-off. New dependencies anywhere must satisfy the
 `deny.toml` license allowlist.
 
@@ -64,8 +66,10 @@ re-measured, not edited.
 - Unit tests on everything with a shape; property tests (`proptest`) where a
   law exists; golden tests (`insta`) for serialized output; terminal tests
   (`termlens`) through a real PTY on hermetic fixtures.
-- Hardware tests live behind a `hardware` feature and `#[ignore]`. CI is
-  green with no GPU present — that *is* the no-GPU path's regression test.
+- Hardware tests live behind a `hardware` feature and `#[ignore]`
+  (`cargo test -p oxmera-cuda --features hardware` on a CUDA machine; the
+  Metal parity suite runs wherever a Metal device exists). CI is green with
+  no GPU present — that *is* the no-GPU path's regression test.
 - MSRV is measured, not declared: `rust-version` reflects what the
   dependency graph requires, verified in CI against the committed lockfile,
   raised in its own commit when a dependency forces it.

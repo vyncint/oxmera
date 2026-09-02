@@ -7,7 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-02
+
+The NVIDIA CUDA release, plus the edge-case hardening milestone.
+
 ### Added
+
+- **`oxmera-cuda`: a real `Device::Cuda` backend** through the CUDA driver
+  API via `cudarc`. The Metal kernel set (strided unary/binary, axis and
+  two-stage full reductions, 16×16 tiled matmul) ported to CUDA C, compiled
+  once to PTX for `compute_75` and embedded; the source is embedded too and
+  is rebuilt through NVRTC for drivers that reject the shipped ISA. `libcuda`
+  is loaded at runtime — building needs no toolkit, and a machine without a
+  driver simply has no CUDA device. Registered by `oxmera::init()` and at
+  load time; `default_device()` prefers Metal, then CUDA, then CPU;
+  `oxmera train --device cuda`; `oxmera doctor` reports the device, memory
+  and compute capability. (ADR-0007.)
+- `StorageData::Opaque` — device buffers owned by a backend crate the hub
+  does not depend on.
+- `Tensor::is_tracked()` — the public predicate for autograd-tape
+  membership, which is what observes `no_grad` (#20).
+- `matmul` batch broadcasting and rank-2 × rank-3 operands, per the shared
+  `plan_matmul` contract every backend implements; broadcast operands use a
+  zero batch stride, nothing is materialized; VJPs reduce onto the operand
+  shape (#22).
+- `oxmera --help` / `-h` / `help` print usage to stdout and exit 0 (#21).
+
+### Measured
+
+- **CUDA on an NVIDIA A10G** (sm_86, driver 595.71.05, CUDA 13.2): parity
+  suite 8/8 at `1e-5` (unary, binary with broadcast, reductions on every
+  axis and in full, matmul incl. batch broadcast, views/softmax/argmax,
+  zero-element tensors, end-to-end autograd); full workspace 108 tests
+  green with CUDA registered at load time; Compute Sanitizer memcheck 0
+  errors, racecheck 0 hazards, synccheck 0 errors over the parity binary;
+  `oxmera train --device cuda --epochs 10` reaches the same loss as
+  CPU/Metal (0.643) at ~14.7k samples/s. Correctness only — no throughput
+  claims.
+- **CPU performance** (Apple M4 Pro, release, best of 3, 0.1.1 → 0.2.0):
+  full `sum` of 10M elements 6.6 → 193 GB/s; `mean` over [4096,2048] 4.7 →
+  180 GB/s; axis-1 sum 38 → 167 GB/s; axis-0 sum 8.8 → 90 GB/s; same-shape
+  `add` 38 → 114 GB/s; `relu` 94 → 129 GB/s; `softmax [1024,4096]` 11.0 →
+  2.1 ms; `broadcast_to().contiguous()` of 4M elements 3.4 → 0.15 ms;
+  matmul 1024³ 280 → 310 GFLOP/s.
+
+### Fixed
+
+- **Segfault:** `to_device(Metal)` on a zero-element tensor read 4 bytes
+  past an empty allocation (`upload` inflated the copy length along with
+  the placeholder size). Allocated, never copied, now; the parity suites
+  round-trip `[0,3]`, `[2,0]`, `[0]`, `[2,0,5]` (#17).
+- Reductions over a zero extent panicked with index-out-of-bounds; they
+  return the identity (sum 0, max −∞, min +∞; mean is NaN). `argmax` over an
+  empty dimension returned a fabricated 0 and is now `InvalidArgument`
+  (#18).
+- `from_vec_f32`/`from_vec_i64` take `impl Into<Shape>` like every other
+  constructor (#19).
+- `backward()` seeded the gradient on the CPU regardless of the loss's
+  device, so backward on a Metal- or CUDA-resident loss failed at the first
+  VJP with `DeviceMismatch`. Found by the CUDA end-to-end test; the same
+  test now runs on Metal.
+- CPU sums are Neumaier-compensated across eight lanes: on a
+  cancellation-heavy 100k-element input the serial fold was 0.30 off the
+  f64 truth, the new path 0.015.
+
+### Security
+
+- **Shape validation:** `Shape::numel` wrapped on overflow, so a shape like
+  `[2^32, 2^32]` had "0" elements, passed the length check against an empty
+  buffer, and produced a tensor claiming 2^64 elements over no storage.
+  `Shape::checked_numel` gates every caller-supplied shape
+  (`from_vec_*`, `reshape`, `broadcast_to`/`broadcast_view`) with a typed
+  error, and `numel` itself fails loudly instead of wrapping.
+- Unsafe audit: the workspace's `unsafe` is confined to the Metal and CUDA
+  backends (FFI-adjacent, each block with a `// SAFETY:` note) and the two
+  `Send`/`Sync` impls in storage; eight crates keep
+  `#![forbid(unsafe_code)]`. Untrusted-input paths (safetensors load, TOML
+  fixtures/replays) validate dtype and shape before allocating.
+
+### Changed
+
+- Reductions, elementwise ops and strided gathers have contiguous fast
+  paths (row-based, op dispatched once per call into a monomorphized loop);
+  softmax/log_softmax no longer materialize their broadcast max and sum.
+  GEMM processes four output rows per task.
+- The research crate is `research/oxmera-cuda-oxide` (was `oxmera-cuda`);
+  the gate, research workflow and justfile follow. Its verdicts are
+  unchanged (strict 0/0/0 at cc 7.5 and 8.6, 12/12 admitted).
+- Docs: README, ARCHITECTURE, AGENTS, CONTRIBUTING, LIMITATIONS and ROADMAP
+  describe the two CUDA paths; the `cuda deferred` doctor line is gone.
+
+### Earlier in this cycle (post-0.1.1, pre-0.2.0)
 
 - `research/oxmera-cuda-oxide` (then `research/oxmera-cuda`) gains an on-device parity harness
   (`src/bin/parity.rs`, behind the `hardware` feature, run with

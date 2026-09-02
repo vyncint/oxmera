@@ -33,7 +33,7 @@ let logits = model.forward(&x)?;
 | area | what you get |
 |---|---|
 | tensors | `f32` strided views (`reshape`/`permute`/`narrow`/`broadcast_to` are zero-copy), NumPy broadcasting, batched matmul, operator overloading (`&a + &b`, `a * 2.0`) |
-| devices | CPU (rayon-parallel, cache-tiled GEMM) and Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory); `tensor.to_device(...)` moves data, autograd flows across the move |
+| devices | CPU (rayon-parallel, cache-tiled GEMM), Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory) and NVIDIA CUDA (the same kernels in CUDA C, shipped as PTX and driven through the driver API — no CUDA toolkit needed to build, `libcuda` found at runtime); `tensor.to_device(...)` moves data, autograd flows across the move |
 | autograd | tape-based reverse mode: `requires_grad`, `backward()`, gradient accumulation, `no_grad` RAII guard — every VJP validated by finite differences in CI |
 | nn | `Linear`, `Conv2d`, `Embedding`, `LayerNorm`, `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`, `BCEWithLogitsLoss`; Kaiming/Xavier initializers |
 | optim | `SGD` (momentum, weight decay), `Adam`, `AdamW`, `RMSprop` |
@@ -46,8 +46,13 @@ let logits = model.forward(&x)?;
 cargo add oxmera                     # library
 cargo install oxmera-cli             # the `oxmera` binary
 oxmera doctor                        # what can this machine do?
-oxmera train --tui --device metal    # watch a model train, live
+oxmera train --tui --device metal    # watch a model train, live (Apple Silicon)
+oxmera train --tui --device cuda     # … or on an NVIDIA GPU
 ```
+
+CUDA needs only the NVIDIA driver at runtime (`libcuda`); if the driver is
+older than the toolkit that produced the shipped PTX, the kernels are
+rebuilt for your GPU through NVRTC when `libnvrtc` is present.
 
 Run the example (MNIST if `./data/mnist` holds the IDX files, a synthetic
 dataset otherwise):
@@ -58,9 +63,11 @@ cargo run --release -p oxmera --example train_mnist -- --device metal
 
 ## Correctness, not vibes
 
-- The CPU backend is the reference; the Metal backend is **asserted equal
-  to it within `1e-5`** across every op family, in tests that run on real
-  Apple-Silicon hardware.
+- The CPU backend is the reference; the Metal and CUDA backends are
+  **asserted equal to it within `1e-5`** across every op family, in tests
+  that run on real hardware (Apple Silicon; an NVIDIA A10G, where the CUDA
+  suite also runs clean under Compute Sanitizer's memcheck, racecheck and
+  synccheck).
 - Every backward pass is checked against **central finite differences**.
 - Terminal output is captured from a **real PTY** (via `termlens`) and
   compared to golden frames; a 100-iteration stress proves frame-for-frame
@@ -70,11 +77,16 @@ cargo run --release -p oxmera --example train_mnist -- --device metal
 
 ## What this deliberately is not (yet)
 
-- **No CUDA backend.** Deferred; the research scaffolding for a
-  convergence-checked CUDA path (via `cuda-oxide` + `reconverge` +
-  `launchbound`) lives under `research/` and will return as a backend
-  later. No stable-workspace crate may depend on those tools — CI enforces
-  the firewall.
+- **Two CUDA paths, deliberately.** `oxmera-cuda` is the shipped backend:
+  CUDA C kernels through the driver API, no compiler research involved.
+  `research/oxmera-cuda-oxide` is the separate research line — kernels
+  written in Rust with `cuda-oxide`, statically verified by `reconverge`
+  and `launchbound` on plain CI runners. The research toolchain never
+  becomes a dependency of the stable workspace; `deny.toml` enforces that
+  firewall.
+- **CUDA is correctness-first for now.** One stream, synchronous
+  downloads, no cuBLAS, `f32` only; timings are not claimed until they
+  are measured.
 - **`f32`-first.** Integer tensors exist for indices and targets; wider
   dtype coverage is roadmap.
 - **No performance claims without measurements.** See
@@ -94,4 +106,4 @@ from that era live on as this repository's integration tests.
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
 your option. See [CONTRIBUTING.md](CONTRIBUTING.md): DCO + signed commits,
 Conventional Commits, zero AI attribution in history, and a dependency
-firewall around the deferred CUDA toolchain.
+firewall around the cuda-oxide research toolchain.

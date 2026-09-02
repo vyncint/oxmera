@@ -10,11 +10,16 @@ numbers come from re-runnable commands.
   No implicit promotion — dtype mismatches are typed errors.
 - **matmul ranks:** rank-2 and batched rank-3. No einsum, no implicit
   batching of higher ranks.
-- **CUDA: none.** The backend set is CPU and Apple Metal. The
-  convergence-checked CUDA path (`cuda-oxide`/`reconverge`/`launchbound`)
-  is deferred; its scaffolding lives in `research/` and those tools remain
-  banned as dependencies of the stable workspace.
-
+- **CUDA: correctness-first.** `Device::Cuda` runs the same five kernels as
+  Metal through the CUDA driver API on one stream with synchronous
+  downloads; there is no cuBLAS path, no stream overlap, no `f16`, and no
+  performance claim beyond the parity and sanitizer evidence in the
+  changelog. Requirements: an NVIDIA driver from the 12.8 series or newer
+  (the `cuda-12080` bindings); the shipped PTX targets `compute_75`
+  (Turing+) and was emitted by CUDA 13.2, so a driver older than that
+  needs `libnvrtc` present for the runtime rebuild. The research line under
+  `research/oxmera-cuda-oxide` (`cuda-oxide`/`reconverge`/`launchbound`)
+  is unrelated to this backend and still not a dependency.
 ## Performance honesty
 
 - The CPU backend is rayon-parallel with a cache-blocked GEMM, but it is

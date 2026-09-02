@@ -9,19 +9,21 @@ what follows.
 ```
 oxmera            umbrella re-export; links every backend for the platform
 oxmera-core       dtype, shape, strides, layout, device handles, errors
-oxmera-tensor     THE HUB: Tensor, views, storage (CPU + Metal buffers),
-                  the Backend trait + registry, autograd tape, operator
-                  overloads, and the built-in CPU backend implementation
+oxmera-tensor     THE HUB: Tensor, views, storage (CPU, Metal, and opaque
+                  device buffers), the Backend trait + registry, autograd
+                  tape, operator overloads, and the built-in CPU backend
 oxmera-ops        the backend op vocabulary (re-exported from the hub)
 oxmera-runtime    init/registration, device selection, no_grad re-exports
 oxmera-cpu        public face of the CPU backend
 oxmera-metal      Apple Metal backend: MSL kernels, pipelines, buffers
+oxmera-cuda       NVIDIA CUDA backend: CUDA C kernels as PTX, driver API
 oxmera-autograd   autograd surface + finite-difference gradcheck
 oxmera-nn         Module, layers, losses, initializers, safetensors
 oxmera-optim      SGD / Adam / AdamW / RMSprop over shared Param handles
 oxmera-cli        `oxmera doctor` and `oxmera train --tui`
 --- separate nightly workspace: research/ ---
-oxmera-cuda       deferred CUDA path (cuda-oxide; nothing implemented)
+oxmera-cuda-oxide research CUDA kernels in Rust via cuda-oxide, verified
+                  by reconverge + launchbound; never a dependency
 ```
 
 ## Why the tensor crate is the hub
@@ -32,14 +34,19 @@ crate that defines `Tensor`; dispatching those operators requires the
 reference backend lives *inside* the hub so `backend_for(Device::Cpu)` can
 register it lazily — the CPU is always available, with no link-order or
 life-before-main caveats. GPU backends register from load-time
-constructors when linked (`oxmera-metal` on macOS), with
-`oxmera::init()` as the explicit fallback.
+constructors when linked (`oxmera-metal` on macOS; `oxmera-cuda` wherever
+`libcuda` can be loaded and a device exists), with `oxmera::init()` as the
+explicit fallback. A backend the hub does not depend on keeps its
+allocation behind `StorageData::Opaque` — an `Arc<dyn Any>` plus an
+element count — and downcasts it back; that is how `oxmera-cuda` holds a
+`cudarc` slice without `oxmera-tensor` knowing about `cudarc`.
 
 ## Dispatch and autograd
 
 - `Device` is a handle; the registry resolves it to an `Arc<dyn Backend>`.
 - Backends implement a small primitive set: `unary`/`binary` (strided,
-  broadcasting), `matmul` (rank-2 and batched rank-3), `reduce`,
+  broadcasting), `matmul` (rank 2 or 3 with NumPy batch broadcasting, per
+  the shared `plan_matmul` contract), `reduce`,
   `argmax`, `contiguous`, `upload`/`download`, and optional
   `index_select`/`index_add` (with a CPU round-trip fallback).
 - Everything else — mean, softmax, losses, convolution (im2col),
@@ -59,17 +66,33 @@ Buffers are `StorageModeShared` (unified memory); every dispatch is a
 synchronous command buffer in v0.1. Parity with the CPU backend is
 asserted at `1e-5` in tests that run on real hardware.
 
+## The CUDA backend
+
+The same five kernels as Metal, written once in CUDA C (`kernels.cu`) with
+the identical `TensorMeta` ABI and opcodes, compiled by `nvcc` to PTX for
+the `compute_75` virtual architecture and embedded in the crate; the CUDA
+C source is embedded too, and a driver that rejects the shipped PTX ISA
+gets the kernels rebuilt for its compute capability through NVRTC. The
+driver library is `dlopen`ed by `cudarc` — nothing links against CUDA, so
+the crate builds and its tests pass on machines with no toolkit and no
+GPU, where it registers no device. One context, one stream, synchronous
+downloads; parity with the CPU backend is asserted at `1e-5` on real
+hardware, and the parity binary runs clean under Compute Sanitizer.
+
 ## The dependency firewall (unchanged)
 
 No stable-workspace crate may depend — directly or transitively — on the
-`cuda-oxide`, `reconverge`, or `launchbound` families. Those serve the
-deferred CUDA path as *tools*; `deny.toml` enforces the ban and CI fails
-on violations. The `research/` workspace (own pinned nightly,
-`nightly-2026-04-03`) is where that path lives until it returns.
+`cuda-oxide`, `reconverge`, or `launchbound` families. Those are the
+*research* CUDA toolchain, kept in the `research/` workspace (own pinned
+nightly, `nightly-2026-04-03`) and verified on plain CI runners;
+`deny.toml` enforces the ban and CI fails on violations. The shipped
+`oxmera-cuda` backend uses `cudarc` and the driver API and has nothing in
+common with that toolchain but the GPU.
 
 ## Two workspaces, still
 
 The root workspace is stable Rust (MSRV 1.88, measured against the
 lockfile). `research/` keeps its own `rust-toolchain.toml`; a fresh clone
 builds and tests with no CUDA toolkit and no LLVM, and CI's Linux runners
-prove the no-GPU path on every push (Metal code is cfg-gated to macOS).
+prove the no-GPU path on every push (Metal code is cfg-gated to macOS;
+CUDA simply finds no driver and registers nothing).
