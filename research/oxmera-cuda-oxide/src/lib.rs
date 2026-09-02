@@ -1,5 +1,8 @@
-//! oxmera-cuda — the CUDA kernels for oxmera's deferred GPU backend,
-//! written as ordinary Rust with `cuda-oxide`'s `#[kernel]`.
+//! oxmera-cuda-oxide — research CUDA kernels written as ordinary Rust with
+//! `cuda-oxide`'s `#[kernel]`, verified without a GPU by `reconverge` and
+//! `launchbound`. This is the *research* CUDA path; the shipped
+//! `Device::Cuda` backend is the `oxmera-cuda` crate in the stable
+//! workspace, which drives the CUDA driver API through `cudarc`.
 //!
 //! Everything here is verified on a laptop, with no GPU:
 //! `cargo reconverge check --strict` proves barrier and warp-collective

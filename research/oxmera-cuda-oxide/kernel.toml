@@ -12,7 +12,7 @@
 # no PTX float intrinsics (cuda-oxide marks them sm_80+); the PTX for
 # sm_75 and sm_86 is assembled with ptxas in the tier-1 container.
 [kernel]
-name = "oxmera-cuda"
+name = "oxmera-cuda-oxide"
 entry = "reduce_sum"
 domain = 1
 needs_cc = "7.5"

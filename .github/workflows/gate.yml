@@ -1,5 +1,5 @@
 # The convergence gate: the GPU-correctness thesis, proven on plain
-# runners with no GPU. Two legs over research/oxmera-cuda:
+# runners with no GPU. Two legs over research/oxmera-cuda-oxide:
 #
 #   1. `cargo reconverge check --strict` — static barrier and
 #      warp-collective convergence, zero findings tolerated;
@@ -35,7 +35,7 @@ jobs:
           cargo +nightly-2026-04-03 install --locked cargo-reconverge --version 0.4.0
           cargo +nightly-2026-04-03 install --locked reconverge-driver --version 0.4.0
       - name: Strict convergence check, per-part context for both targets
-        working-directory: research/oxmera-cuda
+        working-directory: research/oxmera-cuda-oxide
         env:
           RUSTUP_TOOLCHAIN: nightly-2026-04-03
         run: |
@@ -55,7 +55,7 @@ jobs:
         id: gate
         uses: vyncint/launchbound/action@bac7be26d6b371ccd46f15232e26990be7dbce03 # v2.0.0
         with:
-          kernel: research/oxmera-cuda
+          kernel: research/oxmera-cuda-oxide
           cc: ${{ matrix.cc }}
           fail-on: refused
           reconverge-version: "0.4.0"

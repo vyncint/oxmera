@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `research/oxmera-cuda` gains an on-device parity harness
+- `research/oxmera-cuda-oxide` (then `research/oxmera-cuda`) gains an on-device parity harness
   (`src/bin/parity.rs`, behind the `hardware` feature, run with
   `cargo oxide run --features hardware -- --bin parity`): every kernel
   against an f64 host reference at edge shapes — sizes 1 … 1,000,003,
@@ -31,7 +31,7 @@ Toolchain bump and verification release; no framework API changes.
 
 ### Added
 
-- `research/oxmera-cuda` (issue #10): production cuda-oxide kernels —
+- `research/oxmera-cuda-oxide` (then `research/oxmera-cuda`; issue #10): production cuda-oxide kernels —
   grid-stride elementwise ops, staged warp-synchronous tree reductions,
   and double-buffered shared-memory tiled GEMM — statically verified by
   `reconverge check --strict` (0 findings, both compute capabilities) and

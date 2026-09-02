@@ -19,7 +19,7 @@ standard losses and optimizers, safetensors weights, and the PTY-tested
 
 ## CUDA (in progress under `research/`)
 
-- [x] Kernel set in `research/oxmera-cuda` (issue #10): grid-stride
+- [x] Kernel set in `research/oxmera-cuda-oxide` (issue #10): grid-stride
       elementwise (add/sub/mul/div/neg/relu/sigmoid/gelu), two-stage
       staged + warp-butterfly reductions (sum/max), and double-buffered
       tiled GEMM (16 and 32 tile edges) — `cargo reconverge check

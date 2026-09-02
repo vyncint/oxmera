@@ -10,8 +10,8 @@
 //! summation order differs from a serial fold.
 
 use cuda_core::{CudaContext, DeviceBuffer, LaunchConfig1D};
-use oxmera_cuda::params::{K, M, MT, N, TILE};
-use oxmera_cuda::{elementwise, matmul, reduce};
+use oxmera_cuda_oxide::params::{K, M, MT, N, TILE};
+use oxmera_cuda_oxide::{elementwise, matmul, reduce};
 
 /// Deterministic pseudo-random f32 in `[-scale, scale]` (xorshift, no deps).
 struct Rng(u64);

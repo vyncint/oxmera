@@ -28,12 +28,12 @@ their test targets. Still the floor, not a property.
 
 ## (b) `cargo reconverge check --strict` on the kernel crate
 
-Kernel: `research/oxmera-cuda` (11 kernels: 8 elementwise, 2 reductions,
+Kernel: `research/oxmera-cuda-oxide` (11 kernels: 8 elementwise, 2 reductions,
 1 tiled GEMM; cuda-device `a766fc26`, pinned nightly via
 `research/rust-toolchain.toml`).
 
 ```
-$ cd research/oxmera-cuda
+$ cd research/oxmera-cuda-oxide
 $ cargo clean && /usr/bin/time -p cargo reconverge check --strict --cc 8.6   # cold
 reconverge: 0 deny, 0 confirmed, 0 warning findings
 real 2.91
@@ -71,9 +71,9 @@ standalone.
 
 ```
 $ cargo oxide inspect --arch sm_75      # Finished `release` in 7.29s; .target sm_75
-$ ptxas -arch=sm_75 -v oxmera_cuda.ptx -o sm_75.cubin       # exit 0
+$ ptxas -arch=sm_75 -v oxmera_cuda_oxide.ptx -o sm_75.cubin       # exit 0
 $ cargo oxide inspect --arch sm_86      # Finished `release` in 7.30s; .target sm_86
-$ ptxas -arch=sm_86 -v oxmera_cuda.ptx -o sm_86.cubin       # exit 0
+$ ptxas -arch=sm_86 -v oxmera_cuda_oxide.ptx -o sm_86.cubin       # exit 0
 ptxas info : reduce_sum   : Used 20 registers, used 1 barriers, 4224 bytes smem   (sm_86)
 ptxas info : reduce_max   : Used 20 registers, used 1 barriers, 4224 bytes smem
 ptxas info : matmul_tiled : Used 38 registers, used 1 barriers, 4096 bytes smem
@@ -101,13 +101,13 @@ launchbound 2.0.0 pins reconverge 0.4.0 internally; the project's pairing
 and launchbound's own are identical, as with 1.2.0/0.3.0.
 
 ```
-$ cd research/oxmera-cuda
+$ cd research/oxmera-cuda-oxide
 $ /usr/bin/time -p launchbound prune --cc 7.5 .
-oxmera-cuda (cc 7.5):
+oxmera-cuda-oxide (cc 7.5):
   => 12 clean, 0 with caveats, 0 refused, 0 tool errors
 real 3.21
 $ /usr/bin/time -p launchbound prune --cc 8.6 .
-oxmera-cuda (cc 8.6):
+oxmera-cuda-oxide (cc 8.6):
   => 12 clean, 0 with caveats, 0 refused, 0 tool errors
 real 3.19
 ```

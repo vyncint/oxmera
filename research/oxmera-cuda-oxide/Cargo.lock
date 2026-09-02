@@ -348,7 +348,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxmera-cuda"
+name = "oxmera-cuda-oxide"
 version = "0.1.1"
 dependencies = [
  "cuda-core",
