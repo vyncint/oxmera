@@ -237,3 +237,31 @@ fn autograd_flows_through_metal() {
         .sum();
     assert!(s > 1e-3, "gradient collapsed to zero: {s}");
 }
+
+/// Issue #17: a zero-element tensor must round-trip and run through every
+/// op family without touching memory it does not own. Every shape here
+/// has numel 0.
+#[test]
+fn zero_element_tensors_are_safe_on_every_path() {
+    let device = metal();
+    for dims in [vec![0usize, 3], vec![2, 0], vec![0], vec![2, 0, 5]] {
+        let t = Tensor::zeros(Shape::new(dims.clone()));
+        let g = t.to_device(device).unwrap();
+        assert_eq!(g.numel(), 0, "{dims:?}");
+        let back = g.to_device(Device::Cpu).unwrap();
+        assert_eq!(back.dims(), &dims[..]);
+        assert!(back.to_vec_f32().unwrap().is_empty());
+        assert_eq!(g.relu().unwrap().numel(), 0, "{dims:?} unary");
+        assert_eq!(g.add(&g).unwrap().numel(), 0, "{dims:?} binary");
+        assert_eq!(g.contiguous().unwrap().numel(), 0, "{dims:?} contiguous");
+        let axes: Vec<usize> = (0..dims.len()).collect();
+        let s = g.sum(&axes).unwrap().to_device(Device::Cpu).unwrap();
+        assert_eq!(s.to_vec_f32().unwrap(), vec![0.0], "{dims:?} sum of nothing is 0");
+    }
+    // Empty matmul: [2,0] x [0,3] is a 2x3 block of zeros.
+    let a = Tensor::zeros([2usize, 0]).to_device(device).unwrap();
+    let b = Tensor::zeros([0usize, 3]).to_device(device).unwrap();
+    let c = a.matmul(&b).unwrap().to_device(Device::Cpu).unwrap();
+    assert_eq!(c.dims(), &[2, 3]);
+    assert_eq!(c.to_vec_f32().unwrap(), vec![0.0; 6]);
+}

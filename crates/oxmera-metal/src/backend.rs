@@ -523,12 +523,20 @@ impl Backend for MetalBackend {
     fn upload(&self, a: &Tensor) -> Result<Tensor> {
         let host = a.contiguous_untracked()?;
         let data = host.to_vec_f32()?;
-        let bytes = (data.len().max(1) * 4) as u64;
-        let buffer = self.device.new_buffer_with_data(
-            data.as_ptr().cast(),
-            bytes,
-            MTLResourceOptions::StorageModeShared,
-        );
+        // Metal returns nil for a zero-length buffer, so an empty tensor
+        // still gets a one-element placeholder — but it must be
+        // *allocated*, never *copied*: `new_buffer_with_data` reads the
+        // requested byte count from the host pointer, and an empty Vec's
+        // pointer owns zero bytes (issue #17 was a SIGSEGV here).
+        let buffer = if data.is_empty() {
+            self.alloc_out(0)
+        } else {
+            self.device.new_buffer_with_data(
+                data.as_ptr().cast(),
+                (data.len() * 4) as u64,
+                MTLResourceOptions::StorageModeShared,
+            )
+        };
         self.wrap(buffer, a.shape().clone())
     }
 }
