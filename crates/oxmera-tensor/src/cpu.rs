@@ -117,7 +117,7 @@ impl Backend for CpuBackend {
         // the identity (sum → 0, max → -inf, min → +inf). The odometer
         // below is do-while shaped and would read one element that does
         // not exist (issue #18).
-        let empty_reduce = reduced_dims.iter().any(|&d| d == 0);
+        let empty_reduce = reduced_dims.contains(&0);
         let reduce_one = |out_i: usize| -> f32 {
             if empty_reduce {
                 return op.identity();

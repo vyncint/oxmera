@@ -209,11 +209,6 @@ impl ReduceOp {
     }
 }
 
-/// A complete backend: every primitive the tensor method layer dispatches.
-///
-/// Composite operations (mean, softmax, losses, convolution, …) are built
-/// from these primitives device-generically; only what is listed here is
-/// implemented per device.
 /// The shape contract of a matmul, resolved once so every backend agrees.
 ///
 /// Operands are rank 2 (`[m, k]`) or rank 3 (`[b, m, k]`). Batch
@@ -313,6 +308,11 @@ pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
     })
 }
 
+/// A complete backend: every primitive the tensor method layer dispatches.
+///
+/// Composite operations (mean, softmax, losses, convolution, …) are built
+/// from these primitives device-generically; only what is listed here is
+/// implemented per device.
 pub trait Backend: Send + Sync {
     /// The device this backend serves.
     fn device(&self) -> Device;
