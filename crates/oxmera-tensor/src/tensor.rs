@@ -557,6 +557,7 @@ fn storage_len(storage: &Storage) -> usize {
         crate::storage::StorageData::Metal(b) => {
             b.buffer().length() as usize / storage.dtype().size_in_bytes()
         }
+        crate::storage::StorageData::Opaque(b) => b.len(),
     }
 }
 

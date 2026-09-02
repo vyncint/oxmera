@@ -1,5 +1,8 @@
 //! Storage: the owned buffer behind one or more tensors.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use oxmera_core::{DType, Device, Error, Result};
 
 /// Typed host memory for the CPU backend.
@@ -106,6 +109,45 @@ unsafe impl Send for MetalBuffer {}
 #[allow(unsafe_code)]
 unsafe impl Sync for MetalBuffer {}
 
+/// A device buffer owned by a backend crate the tensor hub does not depend
+/// on (the CUDA backend keeps its `cudarc` allocation here). The hub sees
+/// only its element count and device; the owning backend downcasts
+/// `inner` back to its concrete buffer type.
+pub struct OpaqueBuffer {
+    inner: Arc<dyn Any + Send + Sync>,
+    len: usize,
+}
+
+impl OpaqueBuffer {
+    /// Wrap a backend allocation holding `len` elements.
+    pub fn new(inner: Arc<dyn Any + Send + Sync>, len: usize) -> Self {
+        Self { inner, len }
+    }
+
+    /// The backend's allocation, for it to downcast.
+    pub fn inner(&self) -> &Arc<dyn Any + Send + Sync> {
+        &self.inner
+    }
+
+    /// Elements the allocation holds.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether the allocation holds no elements.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl std::fmt::Debug for OpaqueBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpaqueBuffer")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Where the bytes actually live.
 #[derive(Debug)]
 pub enum StorageData {
@@ -114,6 +156,8 @@ pub enum StorageData {
     /// A GPU buffer for the Apple Metal backend.
     #[cfg(target_os = "macos")]
     Metal(MetalBuffer),
+    /// A buffer owned by an out-of-tree backend (see [`OpaqueBuffer`]).
+    Opaque(OpaqueBuffer),
 }
 
 /// An owned, reference-counted buffer of elements on one device.
@@ -184,12 +228,28 @@ impl Storage {
     pub fn cpu(&self) -> Result<&CpuStorage> {
         match &self.data {
             StorageData::Cpu(c) => Ok(c),
-            #[cfg(target_os = "macos")]
-            StorageData::Metal(_) => Err(Error::DeviceMismatch {
+            _ => Err(Error::DeviceMismatch {
                 lhs: self.device,
                 rhs: Device::Cpu,
                 op: "Storage::cpu",
             }),
+        }
+    }
+
+    /// Storage backed by an out-of-tree backend's allocation.
+    pub fn from_opaque(buffer: OpaqueBuffer, dtype: DType, device: Device) -> Self {
+        Self {
+            data: StorageData::Opaque(buffer),
+            dtype,
+            device,
+        }
+    }
+
+    /// The opaque buffer, when this storage lives on an out-of-tree backend.
+    pub fn opaque(&self) -> Option<&OpaqueBuffer> {
+        match &self.data {
+            StorageData::Opaque(b) => Some(b),
+            _ => None,
         }
     }
 }

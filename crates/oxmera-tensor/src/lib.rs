@@ -34,5 +34,5 @@ pub mod tensor;
 
 pub use autograd::{NoGradGuard, no_grad};
 pub use backend::{Backend, BinaryOp, ReduceOp, UnaryOp, backend_for, register_backend};
-pub use storage::{CpuStorage, Storage, StorageData};
+pub use storage::{CpuStorage, OpaqueBuffer, Storage, StorageData};
 pub use tensor::Tensor;

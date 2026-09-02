@@ -186,7 +186,7 @@ impl MetalBackend {
         }
         match t.storage().data() {
             StorageData::Metal(b) if b.device_index == self.index => Ok(b.buffer()),
-            StorageData::Metal(_) | StorageData::Cpu(_) => Err(Error::DeviceMismatch {
+            _ => Err(Error::DeviceMismatch {
                 lhs: t.device(),
                 rhs: self.device(),
                 op,
