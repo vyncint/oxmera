@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           ua="oxmera-release (github.com/${GITHUB_REPOSITORY})"
-          crates="oxmera-core oxmera-tensor oxmera-ops oxmera-cpu oxmera-metal oxmera-runtime oxmera-autograd oxmera-nn oxmera-optim oxmera oxmera-cli"
+          crates="oxmera-core oxmera-tensor oxmera-ops oxmera-cpu oxmera-metal oxmera-cuda oxmera-runtime oxmera-autograd oxmera-nn oxmera-optim oxmera oxmera-cli"
 
           for crate in $crates; do
             # Skip versions already on the registry: that is what makes a

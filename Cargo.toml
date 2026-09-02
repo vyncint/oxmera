@@ -8,6 +8,7 @@ members = [
     "crates/oxmera-runtime",
     "crates/oxmera-cpu",
     "crates/oxmera-metal",
+    "crates/oxmera-cuda",
     "crates/oxmera-autograd",
     "crates/oxmera-nn",
     "crates/oxmera-optim",
@@ -40,6 +41,7 @@ oxmera-ops = { path = "crates/oxmera-ops", version = "0.1.1" }
 oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.1.1" }
 oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.1.1" }
 oxmera-metal = { path = "crates/oxmera-metal", version = "0.1.1" }
+oxmera-cuda = { path = "crates/oxmera-cuda", version = "0.1.1" }
 oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.1.1" }
 oxmera-nn = { path = "crates/oxmera-nn", version = "0.1.1" }
 oxmera-optim = { path = "crates/oxmera-optim", version = "0.1.1" }

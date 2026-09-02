@@ -1,5 +1,5 @@
 //! oxmera — a Rust-native tensor and deep-learning framework with
-//! multi-threaded CPU and Apple-Silicon Metal backends, reverse-mode
+//! multi-threaded CPU, Apple-Silicon Metal and NVIDIA CUDA backends, reverse-mode
 //! autograd, neural-network layers, optimizers, and a terminal UI.
 //!
 //! This umbrella crate re-exports the public surface of the workspace and
@@ -22,6 +22,7 @@
 pub use oxmera_autograd as autograd;
 pub use oxmera_core as core;
 pub use oxmera_cpu as cpu;
+pub use oxmera_cuda as cuda;
 #[cfg(target_os = "macos")]
 pub use oxmera_metal as metal;
 pub use oxmera_nn as nn;

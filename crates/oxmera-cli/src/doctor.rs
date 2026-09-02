@@ -77,7 +77,18 @@ fn render(r: &Report) -> String {
     } else {
         line("  metal   not available on this host".into());
     }
-    line("  cuda    deferred — no backend in this build".into());
+    if r.devices.cuda {
+        let name = r.devices.cuda_name.as_deref().unwrap_or("CUDA device");
+        let cc = r.devices.cuda_cc.as_deref().unwrap_or("?");
+        match r.devices.cuda_memory_gb {
+            Some(gb) => line(format!(
+                "  cuda    {name} — {gb:.1} GB, compute capability {cc}"
+            )),
+            None => line(format!("  cuda    {name} — compute capability {cc}")),
+        }
+    } else {
+        line("  cuda    not available on this host".into());
+    }
     line(String::new());
 
     line("capabilities".into());

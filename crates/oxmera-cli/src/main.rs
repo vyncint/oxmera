@@ -14,7 +14,7 @@ mod tui;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: oxmera <doctor [--fixture <path>] | train [--device cpu|metal] [--epochs N] [--tui] [--replay <path>] | --version | --help>";
+const USAGE: &str = "usage: oxmera <doctor [--fixture <path>] | train [--device cpu|metal|cuda] [--epochs N] [--tui] [--replay <path>] | --version | --help>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

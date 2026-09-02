@@ -64,7 +64,8 @@ fn parse(args: &[String]) -> Result<Args, String> {
             "--device" => match it.next().map(String::as_str) {
                 Some("cpu") => out.device = Device::Cpu,
                 Some("metal") => out.device = Device::Metal { index: 0 },
-                other => return Err(format!("--device expects cpu|metal, got {other:?}")),
+                Some("cuda") => out.device = Device::Cuda { index: 0 },
+                other => return Err(format!("--device expects cpu|metal|cuda, got {other:?}")),
             },
             "--epochs" => {
                 out.epochs = it

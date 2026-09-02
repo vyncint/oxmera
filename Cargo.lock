@@ -326,6 +326,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
 
 [[package]]
+name = "cudarc"
+version = "0.19.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804764d10e844da09765a7b2ca9641a0851523d1702efb0d7299d73e31b86e80"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -746,6 +755,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
+name = "libloading"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -971,6 +990,7 @@ dependencies = [
  "oxmera-autograd",
  "oxmera-core",
  "oxmera-cpu",
+ "oxmera-cuda",
  "oxmera-metal",
  "oxmera-nn",
  "oxmera-ops",
@@ -1011,6 +1031,17 @@ dependencies = [
 name = "oxmera-cpu"
 version = "0.1.1"
 dependencies = [
+ "oxmera-core",
+ "oxmera-tensor",
+]
+
+[[package]]
+name = "oxmera-cuda"
+version = "0.1.1"
+dependencies = [
+ "ctor",
+ "cudarc",
+ "libloading",
  "oxmera-core",
  "oxmera-tensor",
 ]
@@ -1058,6 +1089,7 @@ version = "0.1.1"
 dependencies = [
  "oxmera-core",
  "oxmera-cpu",
+ "oxmera-cuda",
  "oxmera-metal",
  "oxmera-ops",
  "oxmera-tensor",

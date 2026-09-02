@@ -14,7 +14,7 @@ toolchain
 devices
   cpu     available — 11 threads (rayon)
   metal   Apple M3 Pro (fixture) — unified memory budget 27.0 GB
-  cuda    deferred — no backend in this build
+  cuda    not available on this host
 
 capabilities
   tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer

@@ -1,0 +1,25 @@
+[package]
+name = "oxmera-cuda"
+description = "NVIDIA CUDA backend for oxmera through the CUDA driver API (cudarc): strided elementwise, reduction, and tiled matmul kernels shipped as PTX and loaded at runtime — builds anywhere, no CUDA toolkit required."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxmera-core.workspace = true
+oxmera-tensor.workspace = true
+ctor = "0.6.3"
+# The driver library is resolved at runtime (dlopen), never linked: a
+# machine without libcuda simply has no CUDA device. The `cuda-12080`
+# bindings run against any driver from the 12.8 series up, including 13.x.
+cudarc = { version = "0.19.9", default-features = false, features = ["driver", "nvrtc", "dynamic-loading", "cuda-12080"] }
+libloading = "0.9"
+
+[features]
+# Runs the on-device parity suite (`cargo test -p oxmera-cuda --features hardware`).
+# Without it those tests are compiled but #[ignore]d, so CI stays green with no GPU.
+hardware = []

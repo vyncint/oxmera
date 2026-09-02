@@ -14,6 +14,7 @@ oxmera-core.workspace = true
 oxmera-tensor.workspace = true
 oxmera-ops.workspace = true
 oxmera-cpu.workspace = true
+oxmera-cuda.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 oxmera-metal.workspace = true

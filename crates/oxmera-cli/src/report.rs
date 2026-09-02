@@ -52,4 +52,16 @@ pub struct Devices {
     pub metal_name: Option<String>,
     /// Metal recommended working-set budget, GB.
     pub metal_budget_gb: Option<f64>,
+    /// Whether a CUDA device is registered.
+    #[serde(default)]
+    pub cuda: bool,
+    /// CUDA device name, when present.
+    #[serde(default)]
+    pub cuda_name: Option<String>,
+    /// CUDA device memory, GB.
+    #[serde(default)]
+    pub cuda_memory_gb: Option<f64>,
+    /// CUDA compute capability as "major.minor".
+    #[serde(default)]
+    pub cuda_cc: Option<String>,
 }

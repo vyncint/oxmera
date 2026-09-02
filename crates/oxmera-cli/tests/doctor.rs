@@ -78,7 +78,7 @@ fn doctor_screen(fixture_name: &str) -> String {
 fn no_gpu_shape() {
     let screen = doctor_screen("no-gpu.toml");
     assert!(screen.contains("metal   not available on this host"));
-    assert!(screen.contains("cuda    deferred"));
+    assert!(screen.contains("cuda    not available on this host"));
     assert_golden("doctor-no-gpu-100x45.txt", &screen, "no-gpu");
 }
 
@@ -93,6 +93,15 @@ fn metal_shape() {
 
 /// The 100-iteration stress: the same fixture must paint the same frame
 /// every single time.
+#[test]
+fn cuda_shape() {
+    let screen = doctor_screen("cuda.toml");
+    assert!(screen.contains("NVIDIA A10G (fixture)"), "{screen}");
+    assert!(screen.contains("compute capability 8.6"), "{screen}");
+    assert!(screen.contains("metal   not available"), "{screen}");
+    assert_golden("doctor-cuda-100x45.txt", &screen, "cuda");
+}
+
 #[test]
 fn stress_100_iterations_are_identical() {
     let first = normalize(&doctor_screen("metal.toml"));

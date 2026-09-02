@@ -1,9 +1,10 @@
-size: 100x45  cursor: 27,0
+size: 100x45  cursor: 28,0
 oxmera doctor
 =============
 
 host: linux / x86_64
-  cpu cores    4
+  chip         AMD EPYC 7R32 (fixture)
+  cpu cores    4 (4 performance + 0 efficiency)
   memory       16.0 GB unified
 
 toolchain
@@ -13,7 +14,7 @@ toolchain
 devices
   cpu     available — 4 threads (rayon)
   metal   not available on this host
-  cuda    not available on this host
+  cuda    NVIDIA A10G (fixture) — 22.5 GB, compute capability 8.6
 
 capabilities
   tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer

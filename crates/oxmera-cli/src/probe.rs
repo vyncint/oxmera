@@ -55,6 +55,16 @@ pub fn probe() -> Report {
     #[cfg(not(target_os = "macos"))]
     let (metal, metal_name, metal_budget_gb) = (false, None, None);
 
+    let (cuda, cuda_name, cuda_memory_gb, cuda_cc) = match oxmera::cuda::device_summary() {
+        Some((name, bytes, (major, minor))) => (
+            true,
+            Some(name),
+            Some(bytes as f64 / (1024.0 * 1024.0 * 1024.0)),
+            Some(format!("{major}.{minor}")),
+        ),
+        None => (false, None, None, None),
+    };
+
     Report {
         os,
         arch,
@@ -70,6 +80,10 @@ pub fn probe() -> Report {
             metal,
             metal_name,
             metal_budget_gb,
+            cuda,
+            cuda_name,
+            cuda_memory_gb,
+            cuda_cc,
         },
     }
 }

@@ -24,15 +24,24 @@ pub fn init() -> Vec<Device> {
     oxmera_cpu::register();
     #[cfg(target_os = "macos")]
     oxmera_metal::register_default();
+    oxmera_cuda::register_default();
     registered_devices()
 }
 
-/// The preferred compute device on this machine: the first Metal device
-/// when one is registered, the CPU otherwise.
+/// The preferred compute device on this machine: a Metal device when one
+/// is registered, else a CUDA device, else the CPU.
 pub fn default_device() -> Device {
-    registered_devices()
-        .into_iter()
+    let devices = registered_devices();
+    devices
+        .iter()
+        .copied()
         .find(|d| matches!(d, Device::Metal { .. }))
+        .or_else(|| {
+            devices
+                .iter()
+                .copied()
+                .find(|d| matches!(d, Device::Cuda { .. }))
+        })
         .unwrap_or(Device::Cpu)
 }
 

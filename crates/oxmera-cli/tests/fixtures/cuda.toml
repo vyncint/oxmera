@@ -1,0 +1,21 @@
+# Environment shape 3: a Linux box with an NVIDIA GPU and no Metal.
+os = "linux"
+arch = "x86_64"
+
+[host]
+chip = "AMD EPYC 7R32 (fixture)"
+p_cores = 4
+e_cores = 0
+memory_gb = 16.0
+
+[toolchain]
+rustc = "rustc 1.97.1 (fixture)"
+cargo = "cargo 1.97.1 (fixture)"
+
+[devices]
+cpu_threads = 4
+metal = false
+cuda = true
+cuda_name = "NVIDIA A10G (fixture)"
+cuda_memory_gb = 22.5
+cuda_cc = "8.6"
