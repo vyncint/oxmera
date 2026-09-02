@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
 
-use oxmera_core::{Device, Error, Result};
+use oxmera_core::{Device, Error, Result, Shape};
 
 use crate::tensor::Tensor;
 
@@ -214,6 +214,105 @@ impl ReduceOp {
 /// Composite operations (mean, softmax, losses, convolution, …) are built
 /// from these primitives device-generically; only what is listed here is
 /// implemented per device.
+/// The shape contract of a matmul, resolved once so every backend agrees.
+///
+/// Operands are rank 2 (`[m, k]`) or rank 3 (`[b, m, k]`). Batch
+/// dimensions broadcast: a batch of 1 pairs with a batch of `n`, and a
+/// rank-2 operand is treated as batch 1. The output is rank 2 only when
+/// both inputs are; otherwise `[batch, m, n]`.
+///
+/// Batch strides are in elements of the operand's *contiguous* data and
+/// are 0 for a broadcast operand, so no backend has to materialize the
+/// broadcast — batch `i` of `a` starts at `i * a_batch_stride`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatmulPlan {
+    /// Output batch count (1 for a rank-2 result).
+    pub batch: usize,
+    /// Rows of `a` and of the output.
+    pub m: usize,
+    /// Shared dimension.
+    pub k: usize,
+    /// Columns of `b` and of the output.
+    pub n: usize,
+    /// Element offset between consecutive batches of `a` (0 = broadcast).
+    pub a_batch_stride: usize,
+    /// Element offset between consecutive batches of `b` (0 = broadcast).
+    pub b_batch_stride: usize,
+    /// The result shape.
+    pub out_shape: Shape,
+}
+
+/// Resolve the matmul contract for two shapes, or the typed error a
+/// caller sees for incompatible operands.
+pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
+    let (ad, bd) = (a.dims(), b.dims());
+    let (ba, m, k) = match ad {
+        [m, k] => (1usize, *m, *k),
+        [b, m, k] => (*b, *m, *k),
+        _ => {
+            return Err(Error::InvalidArgument {
+                op: "matmul",
+                detail: format!(
+                    "supported ranks are 2 and 3 (batched); got {}x{}",
+                    ad.len(),
+                    bd.len()
+                ),
+            });
+        }
+    };
+    let (bb, kb, n) = match bd {
+        [k, n] => (1usize, *k, *n),
+        [b, k, n] => (*b, *k, *n),
+        _ => {
+            return Err(Error::InvalidArgument {
+                op: "matmul",
+                detail: format!(
+                    "supported ranks are 2 and 3 (batched); got {}x{}",
+                    ad.len(),
+                    bd.len()
+                ),
+            });
+        }
+    };
+    if k != kb {
+        return Err(Error::ShapeMismatch {
+            expected: if bd.len() == 3 {
+                Shape::from([bb, k, n])
+            } else {
+                Shape::from([k, n])
+            },
+            got: b.clone(),
+            op: "matmul",
+        });
+    }
+    let batch = match (ba, bb) {
+        (x, y) if x == y => x,
+        (1, y) => y,
+        (x, 1) => x,
+        // Batch dimensions that are neither equal nor 1 cannot broadcast.
+        _ => {
+            return Err(Error::BroadcastIncompatible {
+                lhs: a.clone(),
+                rhs: b.clone(),
+            });
+        }
+    };
+    let out_shape = if ad.len() == 2 && bd.len() == 2 {
+        Shape::from([m, n])
+    } else {
+        Shape::from([batch, m, n])
+    };
+    Ok(MatmulPlan {
+        batch,
+        m,
+        k,
+        n,
+        a_batch_stride: if ba == 1 { 0 } else { m * k },
+        b_batch_stride: if bb == 1 { 0 } else { k * n },
+        out_shape,
+    })
+}
+
 pub trait Backend: Send + Sync {
     /// The device this backend serves.
     fn device(&self) -> Device;

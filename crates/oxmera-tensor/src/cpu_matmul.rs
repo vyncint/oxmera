@@ -1,8 +1,9 @@
 //! Cache-friendly, rayon-parallel matrix multiplication: rank-2 GEMM and
 //! batched rank-3.
 
+use crate::backend::{MatmulPlan, plan_matmul};
 use crate::tensor::Tensor;
-use oxmera_core::{Error, Result, Shape};
+use oxmera_core::Result;
 use rayon::prelude::*;
 
 /// Block size along the shared dimension: keeps a b-row stripe resident
@@ -11,58 +12,33 @@ const K_BLOCK: usize = 64;
 
 /// `[m, k] x [k, n]` or `[b, m, k] x [b, k, n]`.
 pub fn matmul(a: &Tensor, b: &Tensor) -> Result<Tensor> {
-    match (a.ndim(), b.ndim()) {
-        (2, 2) => {
-            let (m, ka) = (a.dims()[0], a.dims()[1]);
-            let (kb, n) = (b.dims()[0], b.dims()[1]);
-            if ka != kb {
-                return Err(Error::ShapeMismatch {
-                    expected: Shape::from([ka, n]),
-                    got: b.shape().clone(),
-                    op: "matmul",
-                });
-            }
-            let av = a.to_vec_f32()?;
-            let bv = b.to_vec_f32()?;
-            let mut out = vec![0.0f32; m * n];
-            gemm(&av, &bv, &mut out, m, ka, n);
-            Tensor::from_vec_f32(out, Shape::from([m, n]))
-        }
-        (3, 3) => {
-            let (ba, m, ka) = (a.dims()[0], a.dims()[1], a.dims()[2]);
-            let (bb, kb, n) = (b.dims()[0], b.dims()[1], b.dims()[2]);
-            if ba != bb || ka != kb {
-                return Err(Error::ShapeMismatch {
-                    expected: Shape::from([ba, ka, n]),
-                    got: b.shape().clone(),
-                    op: "matmul",
-                });
-            }
-            let av = a.to_vec_f32()?;
-            let bv = b.to_vec_f32()?;
-            let mut out = vec![0.0f32; ba * m * n];
-            out.par_chunks_mut(m * n).enumerate().for_each(|(i, c)| {
-                gemm_serial(
-                    &av[i * m * ka..(i + 1) * m * ka],
-                    &bv[i * ka * n..(i + 1) * ka * n],
-                    c,
-                    m,
-                    ka,
-                    n,
-                );
-            });
-            Tensor::from_vec_f32(out, Shape::from([ba, m, n]))
-        }
-        (ra, rb) => Err(Error::InvalidArgument {
-            op: "matmul",
-            detail: format!("supported ranks are 2x2 and 3x3 (batched); got {ra}x{rb}"),
-        }),
+    let plan = plan_matmul(a.shape(), b.shape())?;
+    let MatmulPlan {
+        batch,
+        m,
+        k,
+        n,
+        a_batch_stride,
+        b_batch_stride,
+        out_shape,
+    } = plan;
+    let av = a.to_vec_f32()?;
+    let bv = b.to_vec_f32()?;
+    let mut out = vec![0.0f32; batch * m * n];
+    if batch == 1 {
+        gemm(&av[..m * k], &bv[..k * n], &mut out, m, k, n);
+    } else {
+        // One batch element per task; a broadcast operand has stride 0
+        // and is simply re-read, never copied.
+        out.par_chunks_mut(m * n).enumerate().for_each(|(i, c)| {
+            let ao = i * a_batch_stride;
+            let bo = i * b_batch_stride;
+            gemm_serial(&av[ao..ao + m * k], &bv[bo..bo + k * n], c, m, k, n);
+        });
     }
+    Tensor::from_vec_f32(out, out_shape)
 }
 
-/// Parallel blocked GEMM: rows of the output split across the pool, the
-/// shared dimension walked in cache-sized blocks, the inner loop a
-/// vectorizable row-axpy.
 fn gemm(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: usize, n: usize) {
     if m * n * k >= 32 * 1024 {
         c.par_chunks_mut(n).enumerate().for_each(|(i, crow)| {

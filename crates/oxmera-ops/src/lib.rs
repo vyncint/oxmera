@@ -20,5 +20,6 @@
 #![warn(missing_docs)]
 
 pub use oxmera_tensor::backend::{
-    Backend, BinaryOp, ReduceOp, UnaryOp, backend_for, register_backend, registered_devices,
+    Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, backend_for, plan_matmul, register_backend,
+    registered_devices,
 };

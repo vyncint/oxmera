@@ -9,7 +9,9 @@ use metal::{
 };
 use oxmera_core::shape::broadcast_shapes;
 use oxmera_core::{DType, Device, Error, Layout, Result, Shape};
-use oxmera_tensor::backend::{Backend, BinaryOp, ReduceOp, UnaryOp, register_backend};
+use oxmera_tensor::backend::{
+    Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, plan_matmul, register_backend,
+};
 use oxmera_tensor::storage::{MetalBuffer, Storage, StorageData};
 use oxmera_tensor::tensor::Tensor;
 
@@ -342,38 +344,15 @@ impl Backend for MetalBackend {
         } else {
             self.contiguous(b)?
         };
-        let (batch, m, k, n) = match (a.ndim(), b.ndim()) {
-            (2, 2) => {
-                let (m, ka) = (a.dims()[0], a.dims()[1]);
-                let (kb, n) = (b.dims()[0], b.dims()[1]);
-                if ka != kb {
-                    return Err(Error::ShapeMismatch {
-                        expected: Shape::from([ka, n]),
-                        got: b.shape().clone(),
-                        op: "matmul",
-                    });
-                }
-                (1usize, m, ka, n)
-            }
-            (3, 3) => {
-                let (ba, m, ka) = (a.dims()[0], a.dims()[1], a.dims()[2]);
-                let (bb, kb, n) = (b.dims()[0], b.dims()[1], b.dims()[2]);
-                if ba != bb || ka != kb {
-                    return Err(Error::ShapeMismatch {
-                        expected: Shape::from([ba, ka, n]),
-                        got: b.shape().clone(),
-                        op: "matmul",
-                    });
-                }
-                (ba, m, ka, n)
-            }
-            (ra, rb) => {
-                return Err(Error::InvalidArgument {
-                    op: "matmul",
-                    detail: format!("supported ranks are 2x2 and 3x3 (batched); got {ra}x{rb}"),
-                });
-            }
-        };
+        let MatmulPlan {
+            batch,
+            m,
+            k,
+            n,
+            a_batch_stride,
+            b_batch_stride,
+            out_shape,
+        } = plan_matmul(a.shape(), b.shape())?;
         let ab = self.buffer_of(&a, "matmul")?;
         let bb = self.buffer_of(&b, "matmul")?;
         let out = self.alloc_out(batch * m * n);
@@ -392,8 +371,10 @@ impl Backend for MetalBackend {
         // One synchronous pass per batch element keeps the kernel simple;
         // batched sizes in this project are small.
         for bi in 0..batch {
-            let a_base = (bi * m * k) as u32;
-            let b_base = (bi * k * n) as u32;
+            // A broadcast operand has batch stride 0: every batch reads
+            // the same block, nothing is materialized.
+            let a_base = (bi * a_batch_stride) as u32;
+            let b_base = (bi * b_batch_stride) as u32;
             let c_base = (bi * m * n) as u32;
             self.run_sync(
                 "matmul_tiled",
@@ -410,11 +391,6 @@ impl Backend for MetalBackend {
                 group,
             );
         }
-        let out_shape = if batch == 1 && a.ndim() == 2 {
-            Shape::from([m, n])
-        } else {
-            Shape::from([batch, m, n])
-        };
         self.wrap(out, out_shape)
     }
 

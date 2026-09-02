@@ -254,3 +254,36 @@ fn accumulation_no_grad_and_zero_grad() {
     );
     assert!(x.grad().is_none(), "no_grad must record nothing");
 }
+
+/// Broadcast matmul (issue #22): gradients for a batch-1 or rank-2
+/// operand are summed over the broadcast batch axis.
+#[test]
+fn matmul_batch_broadcast_gradients_check() {
+    use oxmera_tensor::tensor::Tensor;
+    let a = Tensor::randn_with_seed([2, 2, 3], 21);
+    let b1 = Tensor::randn_with_seed([1, 3, 2], 22); // batch-1 broadcast
+    oxmera_autograd::gradcheck(
+        |i| i[0].matmul(&i[1])?.sum(&[0, 1, 2]),
+        &[a.clone(), b1],
+        1e-3,
+        2e-2,
+    )
+    .expect("batch-1 operand");
+    let b2 = Tensor::randn_with_seed([3, 2], 23); // rank-2 operand
+    oxmera_autograd::gradcheck(
+        |i| i[0].matmul(&i[1])?.sum(&[0, 1, 2]),
+        &[a.clone(), b2],
+        1e-3,
+        2e-2,
+    )
+    .expect("rank-2 operand");
+    let a2 = Tensor::randn_with_seed([2, 3], 24); // rank-2 on the left
+    let b3 = Tensor::randn_with_seed([4, 3, 2], 25);
+    oxmera_autograd::gradcheck(
+        |i| i[0].matmul(&i[1])?.sum(&[0, 1, 2]),
+        &[a2, b3],
+        1e-3,
+        2e-2,
+    )
+    .expect("rank-2 left operand");
+}
