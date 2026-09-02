@@ -30,6 +30,15 @@ fn init_reports_the_platform_devices() {
     let preferred = default_device();
     #[cfg(target_os = "macos")]
     assert!(matches!(preferred, Device::Metal { .. }));
+    // Off macOS the preference is CUDA when a device registered at load
+    // time, else the CPU — a Linux box with an NVIDIA card is a real host.
     #[cfg(not(target_os = "macos"))]
-    assert_eq!(preferred, Device::Cpu);
+    {
+        let has_cuda = devices.iter().any(|d| matches!(d, Device::Cuda { .. }));
+        if has_cuda {
+            assert!(matches!(preferred, Device::Cuda { .. }), "{devices:?}");
+        } else {
+            assert_eq!(preferred, Device::Cpu);
+        }
+    }
 }
