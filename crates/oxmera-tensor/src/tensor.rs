@@ -619,6 +619,30 @@ pub(crate) fn gather_logical<T: Copy>(src: &[T], layout: &Layout) -> Vec<T> {
         return out;
     }
     let strides = layout.strides.values();
+    // Row fast path: when the innermost stride is 1 the row is a slice
+    // copy; when it is 0 (a broadcast dimension being materialized) the
+    // row is one value repeated. Only a genuinely strided innermost
+    // dimension — a transposed view — falls through to the odometer.
+    let ndim = dims.len();
+    let inner = dims[ndim - 1];
+    let inner_stride = strides[ndim - 1];
+    if inner > 0 && (inner_stride == 0 || inner_stride == 1) {
+        let outer = Layout {
+            shape: Shape::new(dims[..ndim - 1].to_vec()),
+            strides: Strides::new(strides[..ndim - 1].to_vec()),
+            offset: layout.offset,
+        };
+        let mut walker = crate::cpu_iter::OffsetWalker::at(&outer, 0);
+        for _ in 0..numel / inner {
+            let base = walker.next_offset();
+            if inner_stride == 1 {
+                out.extend_from_slice(&src[base..base + inner]);
+            } else {
+                out.resize(out.len() + inner, src[base]);
+            }
+        }
+        return out;
+    }
     let mut index = vec![0usize; dims.len()];
     let mut offset = layout.offset as isize;
     loop {
@@ -650,6 +674,9 @@ pub(crate) fn gather_logical<T: Copy>(src: &[T], layout: &Layout) -> Vec<T> {
 fn checked_numel(shape: &Shape, op: &'static str) -> Result<usize> {
     shape.checked_numel().ok_or_else(|| Error::InvalidArgument {
         op,
-        detail: format!("shape {:?} has more elements than fit in usize", shape.dims()),
+        detail: format!(
+            "shape {:?} has more elements than fit in usize",
+            shape.dims()
+        ),
     })
 }

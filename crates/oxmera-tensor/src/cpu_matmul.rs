@@ -41,17 +41,63 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Result<Tensor> {
 
 fn gemm(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: usize, n: usize) {
     if m * n * k >= 32 * 1024 {
-        c.par_chunks_mut(n).enumerate().for_each(|(i, crow)| {
-            gemm_row(&a[i * k..(i + 1) * k], b, crow, k, n);
-        });
+        // Four output rows per task: each loaded b[kk, j] feeds four
+        // accumulator rows, quartering the traffic through B.
+        c.par_chunks_mut(ROWS * n)
+            .enumerate()
+            .for_each(|(blk, cblk)| {
+                let i0 = blk * ROWS;
+                let rows = cblk.len() / n;
+                gemm_rows(&a[i0 * k..(i0 + rows) * k], b, cblk, rows, k, n);
+            });
     } else {
         gemm_serial(a, b, c, m, k, n);
     }
 }
 
 fn gemm_serial(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: usize, n: usize) {
-    for i in 0..m {
-        gemm_row(&a[i * k..(i + 1) * k], b, &mut c[i * n..(i + 1) * n], k, n);
+    for i0 in (0..m).step_by(ROWS) {
+        let rows = ROWS.min(m - i0);
+        gemm_rows(
+            &a[i0 * k..(i0 + rows) * k],
+            b,
+            &mut c[i0 * n..(i0 + rows) * n],
+            rows,
+            k,
+            n,
+        );
+    }
+}
+
+/// Rows per register block.
+const ROWS: usize = 4;
+
+/// `rows` (≤ ROWS) consecutive output rows, K-blocked, with the four row
+/// accumulations sharing each load of B.
+#[inline]
+fn gemm_rows(a: &[f32], b: &[f32], c: &mut [f32], rows: usize, k: usize, n: usize) {
+    if rows < ROWS {
+        for i in 0..rows {
+            gemm_row(&a[i * k..(i + 1) * k], b, &mut c[i * n..(i + 1) * n], k, n);
+        }
+        return;
+    }
+    let (c0, rest) = c.split_at_mut(n);
+    let (c1, rest) = rest.split_at_mut(n);
+    let (c2, c3) = rest.split_at_mut(n);
+    for kb in (0..k).step_by(K_BLOCK) {
+        let kend = (kb + K_BLOCK).min(k);
+        for kk in kb..kend {
+            let (a0, a1, a2, a3) = (a[kk], a[k + kk], a[2 * k + kk], a[3 * k + kk]);
+            let brow = &b[kk * n..kk * n + n];
+            for j in 0..n {
+                let bv = brow[j];
+                c0[j] += a0 * bv;
+                c1[j] += a1 * bv;
+                c2[j] += a2 * bv;
+                c3[j] += a3 * bv;
+            }
+        }
     }
 }
 

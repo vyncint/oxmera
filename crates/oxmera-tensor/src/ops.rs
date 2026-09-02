@@ -417,29 +417,19 @@ impl Tensor {
 
     /// Numerically stable softmax along `dim` — composite.
     pub fn softmax(&self, dim: usize) -> Result<Tensor> {
-        let shifted = self.sub(
-            &self
-                .max_keepdim(&[dim], true)?
-                .detach()
-                .broadcast_to(self.shape().clone())?
-                .contiguous()?,
-        )?;
+        // The row max and row sum stay broadcast views: the binary kernels
+        // consume a stride-0 operand directly, so nothing is materialized.
+        let shifted = self.sub(&self.max_keepdim(&[dim], true)?.detach())?;
         let e = shifted.exp()?;
         let denom = e.sum_keepdim(&[dim], true)?;
-        e.div(&denom.broadcast_to(self.shape().clone())?.contiguous()?)
+        e.div(&denom)
     }
 
     /// Numerically stable log-softmax along `dim` — composite.
     pub fn log_softmax(&self, dim: usize) -> Result<Tensor> {
-        let shifted = self.sub(
-            &self
-                .max_keepdim(&[dim], true)?
-                .detach()
-                .broadcast_to(self.shape().clone())?
-                .contiguous()?,
-        )?;
+        let shifted = self.sub(&self.max_keepdim(&[dim], true)?.detach())?;
         let lse = shifted.exp()?.sum_keepdim(&[dim], true)?.ln()?;
-        shifted.sub(&lse.broadcast_to(self.shape().clone())?.contiguous()?)
+        shifted.sub(&lse)
     }
 
     // ---- indexing -----------------------------------------------------------

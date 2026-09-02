@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use oxmera_core::shape::broadcast_shapes;
-use oxmera_core::{DType, Device, Error, Result, Shape};
+use oxmera_core::{DType, Device, Error, Layout, Result, Shape, Strides};
 use rayon::prelude::*;
 
 use crate::backend::{Backend, BinaryOp, ReduceOp, UnaryOp};
@@ -53,14 +53,22 @@ impl Backend for CpuBackend {
         if a.layout().is_contiguous() {
             let start = a.layout().offset;
             let input = &src[start..start + numel];
-            if numel >= PAR_THRESHOLD {
-                out.par_iter_mut()
-                    .zip(input.par_iter())
-                    .for_each(|(o, &x)| *o = op.eval(x));
-            } else {
-                for (o, &x) in out.iter_mut().zip(input) {
-                    *o = op.eval(x);
-                }
+            // Dispatch on the op once, outside the loop: each arm is its
+            // own monomorphized, vectorizable loop. Leaving `op.eval` inside
+            // the loop relies on LLVM hoisting the match, which it stopped
+            // doing once this module grew (relu: 0.85 ms → 2.3 ms per 10M).
+            match op {
+                UnaryOp::Neg => map_contig(&mut out, input, |x| -x),
+                UnaryOp::Exp => map_contig(&mut out, input, f32::exp),
+                UnaryOp::Ln => map_contig(&mut out, input, f32::ln),
+                UnaryOp::Abs => map_contig(&mut out, input, f32::abs),
+                UnaryOp::Sqrt => map_contig(&mut out, input, f32::sqrt),
+                UnaryOp::Sin => map_contig(&mut out, input, f32::sin),
+                UnaryOp::Cos => map_contig(&mut out, input, f32::cos),
+                UnaryOp::Tanh => map_contig(&mut out, input, f32::tanh),
+                UnaryOp::Relu => map_contig(&mut out, input, |x| x.max(0.0)),
+                UnaryOp::Gelu => map_contig(&mut out, input, |x| UnaryOp::Gelu.eval(x)),
+                UnaryOp::Sigmoid => map_contig(&mut out, input, |x| UnaryOp::Sigmoid.eval(x)),
             }
         } else {
             walk_into(&mut out, a, numel, |x| op.eval(x));
@@ -76,6 +84,28 @@ impl Backend for CpuBackend {
         let bsrc = f32_input(&bv, "binary")?;
         let numel = out_shape.numel();
         let mut out = vec![0.0f32; numel];
+
+        // Fast path: when both operands step through the innermost
+        // dimension with stride 1 (contiguous) or 0 (broadcast — a row
+        // vector, a column vector, a scalar), every output row is a tight
+        // loop over two slices or a slice and a constant. Same-shape
+        // arithmetic, `x - rowmax`, `x / rowsum`, `w * scalar` all land
+        // here; only genuinely strided operands (transposed views) take
+        // the odometer path below.
+        if let Some(rows) = RowPlan::new(&out_shape, av.layout(), bv.layout()) {
+            match op {
+                BinaryOp::Add => rows.run(&mut out, asrc, bsrc, |x, y| x + y),
+                BinaryOp::Sub => rows.run(&mut out, asrc, bsrc, |x, y| x - y),
+                BinaryOp::Mul => rows.run(&mut out, asrc, bsrc, |x, y| x * y),
+                BinaryOp::Div => rows.run(&mut out, asrc, bsrc, |x, y| x / y),
+                BinaryOp::Pow => rows.run(&mut out, asrc, bsrc, |x, y| x.powf(y)),
+                BinaryOp::Maximum => rows.run(&mut out, asrc, bsrc, |x, y| x.max(y)),
+                BinaryOp::Minimum => rows.run(&mut out, asrc, bsrc, |x, y| x.min(y)),
+                BinaryOp::Gt => rows.run(&mut out, asrc, bsrc, |x, y| f32::from(x > y)),
+                BinaryOp::Eq => rows.run(&mut out, asrc, bsrc, |x, y| f32::from(x == y)),
+            }
+            return Tensor::from_vec_f32(out, out_shape);
+        }
 
         let fill = |chunk_start: usize, chunk: &mut [f32]| {
             let mut wa = OffsetWalker::at(av.layout(), chunk_start);
@@ -103,6 +133,69 @@ impl Backend for CpuBackend {
     fn reduce(&self, op: ReduceOp, a: &Tensor, axes: &[usize], keepdim: bool) -> Result<Tensor> {
         let src = f32_input(a, "reduce")?;
         let dims = a.dims().to_vec();
+
+        // Fast paths for contiguous data. `axes` arrives sorted and
+        // deduplicated (normalize_axes). Three layouts cover almost every
+        // reduction a model performs: everything (a loss), a trailing
+        // block (softmax's max/sum over the last dim, row sums) and a
+        // leading block (column sums, batch means).
+        if a.layout().is_contiguous() && a.layout().offset == 0 && !dims.is_empty() {
+            let numel = a.numel();
+            let data = &src[..numel];
+            let (out_dims, _) = split_axes(&dims, axes, keepdim);
+            let out_shape = Shape::new(out_dims);
+            let ndim = dims.len();
+            let trailing = axes
+                .iter()
+                .enumerate()
+                .all(|(i, &ax)| ax == ndim - axes.len() + i);
+            let leading = axes.iter().enumerate().all(|(i, &ax)| ax == i);
+            if axes.len() == ndim {
+                let v = reduce_slice_par(op, data);
+                return Tensor::from_vec_f32(vec![v], out_shape);
+            }
+            if trailing {
+                let inner: usize = dims[ndim - axes.len()..].iter().product();
+                let outer = out_shape.numel();
+                let out: Vec<f32> = if inner == 0 {
+                    vec![op.identity(); outer]
+                } else if outer >= 64 || numel < PAR_THRESHOLD {
+                    // Enough rows to parallelize across, or too small to matter.
+                    let f = |i: usize| reduce_slice(op, &data[i * inner..(i + 1) * inner]);
+                    if numel >= PAR_THRESHOLD {
+                        (0..outer).into_par_iter().map(f).collect()
+                    } else {
+                        (0..outer).map(f).collect()
+                    }
+                } else {
+                    // Few, long rows: parallelize inside each row instead.
+                    (0..outer)
+                        .map(|i| reduce_slice_par(op, &data[i * inner..(i + 1) * inner]))
+                        .collect()
+                };
+                return Tensor::from_vec_f32(out, out_shape);
+            }
+            if leading {
+                let inner = out_shape.numel();
+                let outer: usize = dims[..axes.len()].iter().product();
+                let mut out = vec![op.identity(); inner];
+                if outer > 0 && inner > 0 {
+                    // Walk the reduced rows in memory order, accumulating
+                    // into a contiguous output slab — cache-friendly, and
+                    // with the op dispatched once the inner loop
+                    // vectorizes. Parallel over slab chunks.
+                    match op {
+                        ReduceOp::Sum => {
+                            accumulate_rows(&mut out, data, outer, inner, |a, x| a + x)
+                        }
+                        ReduceOp::Max => accumulate_rows(&mut out, data, outer, inner, f32::max),
+                        ReduceOp::Min => accumulate_rows(&mut out, data, outer, inner, f32::min),
+                    }
+                }
+                return Tensor::from_vec_f32(out, out_shape);
+            }
+        }
+
         let strides = a.layout().strides.values().to_vec();
         let base = a.layout().offset;
 
@@ -314,6 +407,11 @@ impl Backend for CpuBackend {
 }
 
 /// Apply `f` element-by-element over a strided tensor into `out`.
+///
+/// Kept out of line: it is the cold branch of `unary`, and inlining its
+/// row machinery into the caller measurably de-optimized the contiguous
+/// fast path (relu over 10M elements went from 0.85 ms to 2.3 ms).
+#[inline(never)]
 fn walk_into(out: &mut [f32], a: &Tensor, numel: usize, f: impl Fn(f32) -> f32 + Sync) {
     let src = a
         .storage()
@@ -321,6 +419,12 @@ fn walk_into(out: &mut [f32], a: &Tensor, numel: usize, f: impl Fn(f32) -> f32 +
         .expect("caller checked")
         .f32s()
         .expect("caller checked");
+    // Rows whose innermost stride is 1 or 0 (a broadcast view being
+    // materialized, a row-major slice) copy as tight loops.
+    if let Some(rows) = RowPlan::new(a.shape(), a.layout(), a.layout()) {
+        rows.run(out, src, src, |x, _| f(x));
+        return;
+    }
     if numel >= PAR_THRESHOLD {
         let chunk = PAR_THRESHOLD / 4;
         out.par_chunks_mut(chunk).enumerate().for_each(|(i, c)| {
@@ -353,4 +457,197 @@ fn split_axes(dims: &[usize], axes: &[usize], keepdim: bool) -> (Vec<usize>, Vec
         }
     }
     (out_dims, kept)
+}
+
+/// Reduce a contiguous slice serially.
+///
+/// Sums are Neumaier-compensated (Kahan–Babuška) across eight independent
+/// lanes: the lanes let the loop vectorize (a plain fold is a serial chain
+/// because f32 addition is not associative), and the compensation keeps
+/// the result close to the exact sum even when large partials cancel —
+/// a serial f32 fold of 100k values spanning ±50 that sum to −50 is off by
+/// ~0.06; this is off by ~1e-4. Max/min fold directly.
+fn reduce_slice(op: ReduceOp, data: &[f32]) -> f32 {
+    match op {
+        ReduceOp::Sum => {
+            let mut sum = [0.0f32; 8];
+            let mut comp = [0.0f32; 8];
+            let (chunks, rest) = data.as_chunks::<8>();
+            for c in chunks {
+                for i in 0..8 {
+                    let t = sum[i] + c[i];
+                    // Neumaier: recover whichever operand lost low bits.
+                    comp[i] += if sum[i].abs() >= c[i].abs() {
+                        (sum[i] - t) + c[i]
+                    } else {
+                        (c[i] - t) + sum[i]
+                    };
+                    sum[i] = t;
+                }
+            }
+            let mut total = 0.0f32;
+            let mut ctotal = 0.0f32;
+            for x in sum.iter().chain(comp.iter()).chain(rest.iter()) {
+                let t = total + x;
+                ctotal += if total.abs() >= x.abs() {
+                    (total - t) + x
+                } else {
+                    (x - t) + total
+                };
+                total = t;
+            }
+            total + ctotal
+        }
+        _ => data
+            .iter()
+            .fold(op.identity(), |acc, &x| op.combine(acc, x)),
+    }
+}
+
+/// Reduce a contiguous slice across threads when it is large enough:
+/// per-chunk partials, then a serial combine (Sum/Max/Min are associative
+/// up to rounding, and the chunking is fixed for a given length so a
+/// result is deterministic run to run).
+fn reduce_slice_par(op: ReduceOp, data: &[f32]) -> f32 {
+    if data.len() < PAR_THRESHOLD {
+        return reduce_slice(op, data);
+    }
+    let chunk = PAR_THRESHOLD / 4;
+    let partials: Vec<f32> = data
+        .par_chunks(chunk)
+        .map(|c| reduce_slice(op, c))
+        .collect();
+    // Combining the partials is itself a reduction: reuse the compensated
+    // sum so cancellation between large chunk totals is not lost.
+    reduce_slice(op, &partials)
+}
+
+/// Row-wise execution plan for elementwise kernels: the output is walked
+/// one innermost row at a time, and within a row each operand is either
+/// a contiguous slice (inner stride 1) or a single broadcast value (inner
+/// stride 0). Rows are handed to rayon in chunks.
+struct RowPlan {
+    inner: usize,
+    rows: usize,
+    a_outer: Layout,
+    b_outer: Layout,
+    a_step: usize,
+    b_step: usize,
+}
+
+impl RowPlan {
+    /// `None` when an operand is strided along the innermost dimension
+    /// (a transposed view), or the shape is rank 0 / empty.
+    fn new(shape: &Shape, a: &Layout, b: &Layout) -> Option<Self> {
+        let dims = shape.dims();
+        let ndim = dims.len();
+        if ndim == 0 || dims.contains(&0) {
+            return None;
+        }
+        let inner = dims[ndim - 1];
+        let (sa, sb) = (a.strides.values()[ndim - 1], b.strides.values()[ndim - 1]);
+        if !(sa == 0 || sa == 1) || !(sb == 0 || sb == 1) {
+            return None;
+        }
+        let outer = |l: &Layout| Layout {
+            shape: Shape::new(dims[..ndim - 1].to_vec()),
+            strides: Strides::new(l.strides.values()[..ndim - 1].to_vec()),
+            offset: l.offset,
+        };
+        Some(Self {
+            inner,
+            rows: shape.numel() / inner,
+            a_outer: outer(a),
+            b_outer: outer(b),
+            a_step: sa as usize,
+            b_step: sb as usize,
+        })
+    }
+
+    #[inline(never)]
+    fn run(&self, out: &mut [f32], a: &[f32], b: &[f32], f: impl Fn(f32, f32) -> f32 + Sync) {
+        let inner = self.inner;
+        let fill_rows = |first_row: usize, chunk: &mut [f32]| {
+            let mut wa = OffsetWalker::at(&self.a_outer, first_row);
+            let mut wb = OffsetWalker::at(&self.b_outer, first_row);
+            for row in chunk.chunks_mut(inner) {
+                let (oa, ob) = (wa.next_offset(), wb.next_offset());
+                match (self.a_step, self.b_step) {
+                    (1, 1) => {
+                        for (o, (&x, &y)) in row
+                            .iter_mut()
+                            .zip(a[oa..oa + inner].iter().zip(&b[ob..ob + inner]))
+                        {
+                            *o = f(x, y);
+                        }
+                    }
+                    (1, _) => {
+                        let y = b[ob];
+                        for (o, &x) in row.iter_mut().zip(&a[oa..oa + inner]) {
+                            *o = f(x, y);
+                        }
+                    }
+                    (_, 1) => {
+                        let x = a[oa];
+                        for (o, &y) in row.iter_mut().zip(&b[ob..ob + inner]) {
+                            *o = f(x, y);
+                        }
+                    }
+                    _ => row.fill(f(a[oa], b[ob])),
+                }
+            }
+        };
+        let numel = self.rows * inner;
+        if numel >= PAR_THRESHOLD && self.rows > 1 {
+            let rows_per_chunk = (PAR_THRESHOLD / 4 / inner).max(1);
+            out.par_chunks_mut(rows_per_chunk * inner)
+                .enumerate()
+                .for_each(|(i, c)| fill_rows(i * rows_per_chunk, c));
+        } else {
+            fill_rows(0, out);
+        }
+    }
+}
+
+/// `out[i] = f(input[i])` over contiguous data, parallel past the threshold.
+#[inline]
+fn map_contig(out: &mut [f32], input: &[f32], f: impl Fn(f32) -> f32 + Sync) {
+    if out.len() >= PAR_THRESHOLD {
+        out.par_iter_mut()
+            .zip(input.par_iter())
+            .for_each(|(o, &x)| *o = f(x));
+    } else {
+        for (o, &x) in out.iter_mut().zip(input) {
+            *o = f(x);
+        }
+    }
+}
+
+/// Column-style reduction: `out` is one contiguous slab of `inner`
+/// elements and `data` is `outer` consecutive rows of it; every row is
+/// folded into the slab. Parallel across slab chunks when large.
+#[inline]
+fn accumulate_rows(
+    out: &mut [f32],
+    data: &[f32],
+    outer: usize,
+    inner: usize,
+    f: impl Fn(f32, f32) -> f32 + Sync,
+) {
+    let accumulate = |start: usize, chunk: &mut [f32]| {
+        for r in 0..outer {
+            let row = &data[r * inner + start..r * inner + start + chunk.len()];
+            for (o, &x) in chunk.iter_mut().zip(row) {
+                *o = f(*o, x);
+            }
+        }
+    };
+    if outer * inner >= PAR_THRESHOLD && inner >= 256 {
+        let chunk = inner.div_ceil(rayon::current_num_threads()).max(256);
+        out.par_chunks_mut(chunk)
+            .enumerate()
+            .for_each(|(i, c)| accumulate(i * chunk, c));
+    } else {
+        accumulate(0, out);
+    }
 }

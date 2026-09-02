@@ -100,12 +100,15 @@ fn large_tensors_take_the_parallel_path_and_agree() {
     let want: Vec<f32> = data.iter().map(|&x| x.tanh()).collect();
     assert_close(&got, &want, 1e-6, "parallel tanh");
 
+    // Cancellation stress: the stored f32 values sum to about -49.76 while
+    // their magnitudes sum to 2.5e6. A serial f32 fold lands 0.30 away; the
+    // backend's compensated summation lands within ~0.015, about one ulp of
+    // the 3e5-magnitude partials it carries. The reference is the f64 sum
+    // of the actual f32 inputs, and the bound is 0.05 — an order of
+    // magnitude tighter than the uncompensated fold achieves.
     let sum = t.sum(&[]).unwrap().get_f32(&[]).unwrap();
-    let want_sum: f32 = data.iter().sum();
-    assert!(
-        (sum - want_sum).abs() <= want_sum.abs() * 1e-4 + 1e-2,
-        "{sum} vs {want_sum}"
-    );
+    let want_sum = data.iter().map(|&x| x as f64).sum::<f64>() as f32;
+    assert!((sum - want_sum).abs() <= 5e-2, "{sum} vs exact {want_sum}");
 }
 
 #[test]
