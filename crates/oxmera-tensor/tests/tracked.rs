@@ -4,7 +4,9 @@ use oxmera_tensor::autograd::no_grad;
 use oxmera_tensor::tensor::Tensor;
 
 fn leaf() -> Tensor {
-    Tensor::from_slice(&[1.0, 2.0], [2]).unwrap().requires_grad_(true)
+    Tensor::from_slice(&[1.0, 2.0], [2])
+        .unwrap()
+        .requires_grad_(true)
 }
 
 #[test]
@@ -25,5 +27,8 @@ fn no_grad_is_observable_through_is_tracked() {
 fn constants_and_detached_tensors_are_not_tracked() {
     assert!(!Tensor::from_slice(&[1.0, 2.0], [2]).unwrap().is_tracked());
     assert!(!leaf().detach().is_tracked());
-    assert!(leaf().is_tracked(), "a leaf that requires grad is on the tape");
+    assert!(
+        leaf().is_tracked(),
+        "a leaf that requires grad is on the tape"
+    );
 }

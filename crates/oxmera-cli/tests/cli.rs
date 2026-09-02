@@ -20,8 +20,14 @@ fn help_is_stdout_and_exit_zero_in_every_spelling() {
     for flag in ["--help", "-h", "help"] {
         let (code, stdout, stderr) = run(&[flag]);
         assert_eq!(code, 0, "{flag}: exit code");
-        assert!(stdout.starts_with("usage: oxmera"), "{flag}: stdout was {stdout:?}");
-        assert!(stdout.contains("--help"), "{flag}: usage must mention the help flag");
+        assert!(
+            stdout.starts_with("usage: oxmera"),
+            "{flag}: stdout was {stdout:?}"
+        );
+        assert!(
+            stdout.contains("--help"),
+            "{flag}: usage must mention the help flag"
+        );
         assert!(stderr.is_empty(), "{flag}: stderr was {stderr:?}");
     }
 }
@@ -32,7 +38,10 @@ fn unknown_subcommand_is_stderr_and_exit_one() {
         let (code, stdout, stderr) = run(args);
         assert_eq!(code, 1, "{args:?}: exit code");
         assert!(stdout.is_empty(), "{args:?}: stdout was {stdout:?}");
-        assert!(stderr.starts_with("usage: oxmera"), "{args:?}: stderr was {stderr:?}");
+        assert!(
+            stderr.starts_with("usage: oxmera"),
+            "{args:?}: stderr was {stderr:?}"
+        );
     }
 }
 
@@ -40,6 +49,9 @@ fn unknown_subcommand_is_stderr_and_exit_one() {
 fn version_is_stdout_and_exit_zero() {
     let (code, stdout, stderr) = run(&["--version"]);
     assert_eq!(code, 0);
-    assert_eq!(stdout.trim(), format!("oxmera {}", env!("CARGO_PKG_VERSION")));
+    assert_eq!(
+        stdout.trim(),
+        format!("oxmera {}", env!("CARGO_PKG_VERSION"))
+    );
     assert!(stderr.is_empty());
 }
