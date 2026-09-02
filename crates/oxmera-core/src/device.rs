@@ -15,7 +15,8 @@ pub enum Device {
         /// Zero-based device index.
         index: usize,
     },
-    /// An NVIDIA GPU, by device index. Deferred: no backend exists yet.
+    /// An NVIDIA GPU, by device index — served by `oxmera-cuda` when a
+    /// driver and a device are present at load time.
     Cuda {
         /// Zero-based device index.
         index: usize,
