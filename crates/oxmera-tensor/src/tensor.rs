@@ -505,11 +505,21 @@ impl Tensor {
                 ),
             });
         }
-        self.backward_with(Tensor::ones(self.shape().clone()))
+        // The seed lives where the loss lives: a CPU seed against a
+        // device-resident graph failed at the first VJP with a
+        // DeviceMismatch (found by the CUDA backend's end-to-end test, and
+        // latent on Metal).
+        let seed = Tensor::ones(self.shape().clone()).to_device(self.device())?;
+        self.backward_with(seed)
     }
 
     /// Propagate gradients seeding this tensor's gradient with `seed`.
     pub fn backward_with(&self, seed: Tensor) -> Result<()> {
+        let seed = if seed.device() == self.device() {
+            seed
+        } else {
+            seed.to_device(self.device())?
+        };
         crate::autograd::run_backward(self, seed)
     }
 

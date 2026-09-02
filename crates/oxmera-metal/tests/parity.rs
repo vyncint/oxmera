@@ -298,3 +298,49 @@ fn matmul_batch_broadcast_matches_cpu() {
         );
     }
 }
+
+/// backward() on a device-resident loss: the seed and every gradient stay
+/// on the device, and the leaf gradients match the CPU's.
+#[test]
+fn autograd_runs_end_to_end_on_the_device() {
+    let device = metal();
+    let x = Tensor::randn_with_seed([8, 4], 9)
+        .to_device(device)
+        .unwrap()
+        .requires_grad_(true);
+    let w = Tensor::randn_with_seed([4, 3], 10)
+        .to_device(device)
+        .unwrap()
+        .requires_grad_(true);
+    let loss = x.matmul(&w).unwrap().relu().unwrap().sum(&[0, 1]).unwrap();
+    loss.backward().unwrap();
+    let gw = w.grad().expect("grad on device");
+    assert_eq!(gw.device(), device);
+    let xc = x
+        .detach()
+        .to_device(Device::Cpu)
+        .unwrap()
+        .requires_grad_(true);
+    let wc = w
+        .detach()
+        .to_device(Device::Cpu)
+        .unwrap()
+        .requires_grad_(true);
+    xc.matmul(&wc)
+        .unwrap()
+        .relu()
+        .unwrap()
+        .sum(&[0, 1])
+        .unwrap()
+        .backward()
+        .unwrap();
+    let scale = 1.0 + 8.0f32.sqrt();
+    let cpu = wc.grad().unwrap().to_vec_f32().unwrap();
+    let gpu = gw.to_device(Device::Cpu).unwrap().to_vec_f32().unwrap();
+    for (i, (&c, &g)) in cpu.iter().zip(&gpu).enumerate() {
+        assert!(
+            (c - g).abs() <= TOL * scale * c.abs().max(1.0),
+            "grad[{i}]: {c} vs {g}"
+        );
+    }
+}
