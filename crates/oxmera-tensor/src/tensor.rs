@@ -434,13 +434,33 @@ impl Tensor {
         self
     }
 
-    /// Whether gradients accumulate on this tensor during `backward`.
+    /// Whether gradients **accumulate on this tensor** during `backward`
+    /// — true for leaves marked with [`requires_grad_`](Self::requires_grad_).
+    ///
+    /// This answers a narrower question than PyTorch's `requires_grad`:
+    /// a tensor *computed from* such a leaf is on the tape but does not
+    /// accumulate a gradient of its own, so it reports `false` here. Ask
+    /// [`is_tracked`](Self::is_tracked) for "is this on the graph at all".
     pub fn requires_grad(&self) -> bool {
         self.autograd.as_ref().is_some_and(|m| m.requires_grad)
     }
 
-    /// Whether this tensor participates in the tape at all.
-    pub(crate) fn is_tracked(&self) -> bool {
+    /// Whether this tensor participates in the autograd tape at all —
+    /// true for a leaf that requires grad and for anything computed from
+    /// one while recording was enabled; false for constants and for
+    /// everything produced under [`no_grad`](crate::autograd::no_grad).
+    ///
+    /// This is the predicate that observes `no_grad`:
+    ///
+    /// ```
+    /// use oxmera_tensor::tensor::Tensor;
+    /// use oxmera_tensor::autograd::no_grad;
+    ///
+    /// let a = Tensor::from_slice(&[1.0, 2.0], [2]).unwrap().requires_grad_(true);
+    /// assert!(a.mul_scalar(3.0).unwrap().is_tracked());
+    /// assert!(!no_grad(|| a.mul_scalar(3.0).unwrap()).is_tracked());
+    /// ```
+    pub fn is_tracked(&self) -> bool {
         self.autograd.is_some()
     }
 
