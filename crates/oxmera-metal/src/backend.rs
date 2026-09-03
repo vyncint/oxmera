@@ -1,10 +1,10 @@
 //! The Metal backend implementation (macOS only).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use metal::{
-    Buffer, CommandQueue, CompileOptions, ComputePipelineState, Device as MtlDevice,
+    Buffer, CommandBuffer, CommandQueue, CompileOptions, ComputePipelineState, Device as MtlDevice,
     MTLResourceOptions, MTLSize,
 };
 use oxmera_core::shape::broadcast_shapes;
@@ -18,6 +18,11 @@ use oxmera_tensor::tensor::Tensor;
 const KERNELS: &str = include_str!("../kernels.metal");
 const MAX_RANK: usize = 8;
 const FULL_REDUCE_THRESHOLD: usize = 32 * 1024;
+/// Dispatches encoded into one command buffer before it is committed
+/// (without waiting). Bounds the work a single commit carries; the queue
+/// executes committed buffers in order, so correctness never depends on
+/// this number.
+const FLUSH_EVERY: usize = 64;
 
 /// The strided-tensor descriptor shared with the MSL kernels. Layout must
 /// match `TensorMeta` in `kernels.metal`.
@@ -83,12 +88,49 @@ impl TensorMeta {
 }
 
 /// The Metal backend: one device, one command queue, precompiled compute
-/// pipelines for every kernel.
+/// pipelines for every kernel (elementwise, reductions, matmul,
+/// gather/scatter).
+///
+/// Dispatch is asynchronous: ops are encoded into an open command buffer
+/// (one compute encoder each, so they execute in order with Metal's
+/// hazard tracking between them) and the buffer is committed every
+/// `FLUSH_EVERY` (64) ops or at the first host read. Nothing waits until a
+/// tensor's bytes are actually needed on the CPU — `download`, the full
+/// reduction's partials, `to_vec` — which is what turns a training step of
+/// a hundred tiny ops from a hundred round trips into one.
 pub struct MetalBackend {
     index: usize,
     device: MtlDevice,
     queue: CommandQueue,
     pipelines: HashMap<&'static str, ComputePipelineState>,
+    pending: Mutex<Pending>,
+}
+
+/// The open command buffer and every one committed but not yet known to
+/// have completed. Command buffers on one queue *start* in commit order,
+/// but Metal may overlap them and finish them out of order, so waiting on
+/// the newest is not enough — measured: three parity tests read zeros
+/// under `--test-threads` with a newest-only wait.
+#[derive(Default)]
+struct Pending {
+    open: Option<CommandBuffer>,
+    encoded: usize,
+    committed: Vec<CommandBuffer>,
+}
+
+impl Pending {
+    fn commit_open(&mut self) {
+        if let Some(open) = self.open.take() {
+            open.commit();
+            self.committed.push(open);
+        }
+        self.encoded = 0;
+    }
+
+    fn prune_completed(&mut self) {
+        self.committed
+            .retain(|cb| cb.status() != metal::MTLCommandBufferStatus::Completed);
+    }
 }
 
 impl std::fmt::Debug for MetalBackend {
@@ -100,10 +142,12 @@ impl std::fmt::Debug for MetalBackend {
     }
 }
 
-// SAFETY: MTLDevice, MTLCommandQueue, and MTLComputePipelineState are
-// documented thread-safe by Apple; command encoders (the one Metal type
-// that is not) are created, used, and ended inside a single call and never
-// stored. The pipeline map is immutable after construction.
+// SAFETY: MTLDevice, MTLCommandQueue, MTLCommandBuffer and
+// MTLComputePipelineState are documented thread-safe by Apple; command
+// encoders (the one Metal type that is not) are created, used, and ended
+// inside a single call while the `pending` mutex is held, and never
+// stored. The pipeline map is immutable after construction; the open
+// command buffer is only ever touched under that mutex.
 #[allow(unsafe_code)]
 unsafe impl Send for MetalBackend {}
 // SAFETY: see the `Send` justification above.
@@ -111,8 +155,15 @@ unsafe impl Send for MetalBackend {}
 unsafe impl Sync for MetalBackend {}
 
 /// Register a backend for the system-default Metal device, when one
-/// exists. Safe to call repeatedly.
+/// exists. Idempotent: a device that already has a backend keeps it. The
+/// backend carries state (the open command buffer of asynchronous
+/// dispatch), so replacing it while tensors are in flight would leave
+/// their encoded work uncommitted — the parity suite, which calls this
+/// from every test, read zeros under `--test-threads` before this check.
 pub fn register_default() {
+    if oxmera_tensor::backend::backend_for(Device::Metal { index: 0 }).is_ok() {
+        return;
+    }
     if let Some(device) = MtlDevice::system_default() {
         match MetalBackend::new(device, 0) {
             Ok(backend) => register_backend(Arc::new(backend)),
@@ -141,6 +192,8 @@ const PIPELINE_NAMES: &[&str] = &[
     "reduce_axis",
     "reduce_full_partials",
     "matmul_tiled",
+    "gather_dim",
+    "scatter_add_dim",
 ];
 
 impl MetalBackend {
@@ -174,7 +227,31 @@ impl MetalBackend {
             device,
             queue,
             pipelines,
+            pending: Mutex::new(Pending::default()),
         })
+    }
+
+    /// Commit whatever is encoded and block until every committed command
+    /// buffer has completed. Called before any host read of device memory;
+    /// harmless when nothing is pending.
+    pub fn synchronize(&self) {
+        // Commit under the lock, wait outside it, on every outstanding
+        // buffer. Entries stay recorded while a wait is in flight so a
+        // second thread synchronizing concurrently finds and waits on them
+        // too; completed buffers are pruned afterwards (waiting on a
+        // completed buffer returns at once, so a stale entry is harmless).
+        let outstanding: Vec<CommandBuffer> = {
+            let mut pending = self.pending.lock().expect("metal pending poisoned");
+            pending.commit_open();
+            pending.committed.clone()
+        };
+        for cb in &outstanding {
+            cb.wait_until_completed();
+        }
+        self.pending
+            .lock()
+            .expect("metal pending poisoned")
+            .prune_completed();
     }
 
     fn buffer_of<'t>(&self, t: &'t Tensor, op: &'static str) -> Result<&'t Buffer> {
@@ -205,7 +282,9 @@ impl MetalBackend {
         Tensor::from_storage(Arc::new(storage), Layout::contiguous(shape))
     }
 
-    /// Encode one compute pass and block until it completes.
+    /// Encode one compute pass into the open command buffer. Returns as
+    /// soon as it is encoded; execution is ordered after every earlier
+    /// pass and completes by the next [`MetalBackend::synchronize`].
     fn run_sync(
         &self,
         pipeline: &'static str,
@@ -214,7 +293,10 @@ impl MetalBackend {
         grid: MTLSize,
         group: MTLSize,
     ) {
-        let cb = self.queue.new_command_buffer();
+        let mut pending = self.pending.lock().expect("metal pending poisoned");
+        let cb = pending
+            .open
+            .get_or_insert_with(|| self.queue.new_command_buffer().to_owned());
         let enc = cb.new_compute_command_encoder();
         enc.set_compute_pipeline_state(&self.pipelines[pipeline]);
         for (i, b) in buffers.iter().enumerate() {
@@ -229,8 +311,11 @@ impl MetalBackend {
         }
         enc.dispatch_threads(grid, group);
         enc.end_encoding();
-        cb.commit();
-        cb.wait_until_completed();
+        pending.encoded += 1;
+        if pending.encoded >= FLUSH_EVERY {
+            pending.commit_open();
+            pending.prune_completed();
+        }
     }
 
     fn linear_grid(&self, numel: usize) -> (MTLSize, MTLSize) {
@@ -249,13 +334,14 @@ impl MetalBackend {
         )
     }
 
-    /// Read a buffer's f32 contents (unified memory) after GPU work has
-    /// completed.
+    /// Read a buffer's f32 contents (unified memory), first completing
+    /// every encoded and committed pass so the bytes are final.
     fn read_f32(&self, buffer: &Buffer, len: usize) -> Vec<f32> {
+        self.synchronize();
         // SAFETY: `contents()` on a StorageModeShared buffer is a valid
         // pointer to `length()` bytes of unified memory; every kernel that
-        // wrote it was awaited (`wait_until_completed`) before this read,
-        // and `len` is bounded by the allocation the caller made.
+        // wrote it was awaited (`synchronize`) before this read, and `len`
+        // is bounded by the allocation the caller made.
         #[allow(unsafe_code)]
         let slice = unsafe { std::slice::from_raw_parts(buffer.contents().cast::<f32>(), len) };
         slice.to_vec()
@@ -276,6 +362,39 @@ fn split_axes(dims: &[usize], axes: &[usize], keepdim: bool) -> (Vec<usize>, Vec
         }
     }
     (out_dims, kept)
+}
+
+/// Validate an `I64` index tensor against `extent` and pack it as the
+/// `u32` list the gather/scatter kernels read. Indices live on the host
+/// (the GPU backends carry `f32` only), so this is where they are checked.
+fn index_list(indices: &Tensor, extent: usize, shape: &Shape) -> Result<Vec<u32>> {
+    let idx = indices.to_device(Device::Cpu)?.to_vec_i64()?;
+    let mut out = Vec::with_capacity(idx.len());
+    for &i in &idx {
+        if i < 0 || i as usize >= extent {
+            return Err(Error::IndexOutOfBounds {
+                index: vec![i.max(0) as usize],
+                shape: shape.clone(),
+            });
+        }
+        out.push(i as u32);
+    }
+    Ok(out)
+}
+
+impl MetalBackend {
+    fn index_buffer(&self, idx: &[u32]) -> Buffer {
+        if idx.is_empty() {
+            return self
+                .device
+                .new_buffer(4, MTLResourceOptions::StorageModeShared);
+        }
+        self.device.new_buffer_with_data(
+            idx.as_ptr().cast(),
+            (idx.len() * 4) as u64,
+            MTLResourceOptions::StorageModeShared,
+        )
+    }
 }
 
 impl Backend for MetalBackend {
@@ -494,6 +613,87 @@ impl Backend for MetalBackend {
         let buffer = self.buffer_of(&contiguous, "to_cpu")?;
         let data = self.read_f32(buffer, contiguous.numel());
         Tensor::from_vec_f32(data, a.shape().clone())
+    }
+
+    fn index_select(&self, a: &Tensor, dim: usize, indices: &Tensor) -> Result<Tensor> {
+        let dims = a.dims();
+        if dim >= dims.len() {
+            return Err(Error::InvalidArgument {
+                op: "index_select",
+                detail: format!("dim {dim} out of range for rank {}", dims.len()),
+            });
+        }
+        let input = self.buffer_of(a, "index_select")?;
+        let idx = index_list(indices, dims[dim], a.shape())?;
+        let mut out_dims = dims.to_vec();
+        out_dims[dim] = idx.len();
+        let out_shape = Shape::new(out_dims);
+        let out_numel = out_shape.numel();
+        let out = self.alloc_out(out_numel);
+        if out_numel > 0 {
+            let idx_buf = self.index_buffer(&idx);
+            let meta = TensorMeta::from_layout(a.layout(), "index_select")?;
+            let (d, l, n) = (dim as u32, idx.len() as u32, out_numel as u32);
+            let (grid, group) = self.linear_grid(out_numel);
+            self.run_sync(
+                "gather_dim",
+                &[input, &idx_buf, &out],
+                &[
+                    meta.as_bytes(),
+                    &d.to_ne_bytes(),
+                    &l.to_ne_bytes(),
+                    &n.to_ne_bytes(),
+                ],
+                grid,
+                group,
+            );
+        }
+        self.wrap(out, out_shape)
+    }
+
+    fn index_add(&self, a: &Tensor, dim: usize, indices: &Tensor, src: &Tensor) -> Result<Tensor> {
+        let dims = a.dims();
+        if dim >= dims.len() {
+            return Err(Error::InvalidArgument {
+                op: "index_add",
+                detail: format!("dim {dim} out of range for rank {}", dims.len()),
+            });
+        }
+        let idx = index_list(indices, dims[dim], a.shape())?;
+        let mut expected = dims.to_vec();
+        expected[dim] = idx.len();
+        if src.dims() != expected.as_slice() {
+            return Err(Error::ShapeMismatch {
+                expected: Shape::new(expected),
+                got: src.shape().clone(),
+                op: "index_add",
+            });
+        }
+        let ab = self.buffer_of(a, "index_add")?;
+        let sb = self.buffer_of(src, "index_add")?;
+        let numel = a.numel();
+        let out = self.alloc_out(numel);
+        if numel > 0 {
+            let idx_buf = self.index_buffer(&idx);
+            let ma = TensorMeta::from_layout(a.layout(), "index_add")?;
+            let ms = TensorMeta::from_layout(src.layout(), "index_add")?;
+            let (d, l, n) = (dim as u32, idx.len() as u32, numel as u32);
+            let (grid, group) = self.linear_grid(numel);
+            self.run_sync(
+                "scatter_add_dim",
+                &[ab, sb, &idx_buf, &out],
+                &[
+                    ma.as_bytes(),
+                    ms.as_bytes(),
+                    &d.to_ne_bytes(),
+                    &l.to_ne_bytes(),
+                    &n.to_ne_bytes(),
+                ],
+                grid,
+                group,
+            );
+        }
+        self.wrap(out, a.shape().clone())
     }
 
     fn upload(&self, a: &Tensor) -> Result<Tensor> {

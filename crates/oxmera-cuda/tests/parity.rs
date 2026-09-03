@@ -269,3 +269,86 @@ fn autograd_runs_end_to_end_on_the_device() {
         );
     }
 }
+
+/// Native gather/scatter (issue #25): index_select and index_add run on
+/// the device — duplicate indices, a strided source, dim 0 and dim 1 —
+/// and match the CPU exactly.
+#[test]
+#[cfg_attr(not(feature = "hardware"), ignore)]
+fn index_select_and_index_add_match_cpu() {
+    let device = cuda();
+    let a = Tensor::randn_with_seed([5, 7], 61);
+    let g = a.to_device(device).unwrap();
+    for dim in 0..2 {
+        let extent = a.dims()[dim] as i64;
+        let idx = Tensor::from_vec_i64(vec![0, extent - 1, 2, 2, 1], Shape::from([5])).unwrap();
+        let cpu = a.index_select(dim, &idx).unwrap();
+        let gpu = g.index_select(dim, &idx).unwrap();
+        assert_eq!(gpu.device(), device, "result stays on the device");
+        assert_eq!(cpu.dims(), gpu.dims());
+        assert_close(
+            &cpu.to_vec_f32().unwrap(),
+            &back(&gpu),
+            &format!("index_select dim {dim}"),
+        );
+        let src = Tensor::randn_with_seed(cpu.shape().clone(), 62 + dim as u64);
+        let cpu_add = a.index_add(dim, &idx, &src).unwrap();
+        let gpu_add = g
+            .index_add(dim, &idx, &src.to_device(device).unwrap())
+            .unwrap();
+        assert_eq!(gpu_add.device(), device);
+        assert_close(
+            &cpu_add.to_vec_f32().unwrap(),
+            &back(&gpu_add),
+            &format!("index_add dim {dim} with duplicate indices"),
+        );
+    }
+    let at = a.t().unwrap();
+    let gt = g.t().unwrap();
+    let idx = Tensor::from_vec_i64(vec![6, 0, 3], Shape::from([3])).unwrap();
+    assert_close(
+        &at.index_select(0, &idx).unwrap().to_vec_f32().unwrap(),
+        &back(&gt.index_select(0, &idx).unwrap()),
+        "index_select on a transposed view",
+    );
+    let src = Tensor::randn_with_seed([5, 3], 63).t().unwrap();
+    assert_close(
+        &at.index_add(0, &idx, &src).unwrap().to_vec_f32().unwrap(),
+        &back(
+            &gt.index_add(0, &idx, &src.to_device(device).unwrap())
+                .unwrap(),
+        ),
+        "index_add on transposed views",
+    );
+    let bad = Tensor::from_vec_i64(vec![0, 9], Shape::from([2])).unwrap();
+    assert!(g.index_select(0, &bad).is_err());
+    let none = Tensor::from_vec_i64(vec![], Shape::from([0])).unwrap();
+    assert_eq!(g.index_select(1, &none).unwrap().dims(), &[5, 0]);
+}
+
+/// The narrow VJP (index_add into zeros on the loss's device) — the shape
+/// that failed with a DeviceMismatch in oxmega's k-DPP loss on this
+/// backend before 0.3.0.
+#[test]
+#[cfg_attr(not(feature = "hardware"), ignore)]
+fn narrow_backward_runs_on_the_device() {
+    let device = cuda();
+    let x = Tensor::randn_with_seed([4, 6], 64)
+        .to_device(device)
+        .unwrap()
+        .requires_grad_(true);
+    let loss = x
+        .narrow(1, 2, 3)
+        .unwrap()
+        .mul_scalar(2.0)
+        .unwrap()
+        .sum(&[0, 1])
+        .unwrap();
+    loss.backward().unwrap();
+    let g = x.grad().unwrap();
+    assert_eq!(g.device(), device);
+    for (i, v) in back(&g).iter().enumerate() {
+        let want = if (2..5).contains(&(i % 6)) { 2.0 } else { 0.0 };
+        assert_eq!(*v, want, "element {i}");
+    }
+}

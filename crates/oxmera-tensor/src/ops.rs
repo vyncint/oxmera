@@ -506,9 +506,11 @@ impl Tensor {
 
     // ---- indexing -----------------------------------------------------------
 
-    /// Rows of `self` along `dim` selected by `indices` (`I64`).
+    /// Rows of `self` along `dim` selected by `indices` (`I64`, on the CPU).
     pub fn index_select(&self, dim: usize, indices: &Tensor) -> Result<Tensor> {
-        let out = dispatch_index(self, |be, t| be.index_select(t, dim, indices))?;
+        let out = dispatch_index(self, &[indices], |be, t, extra| {
+            be.index_select(t, dim, &extra[0])
+        })?;
         let in_shape = self.shape().clone();
         let idx = indices.clone();
         Ok(record(out, vec![self.clone()], move |g| {
@@ -518,8 +520,12 @@ impl Tensor {
     }
 
     /// `out[indices[i]] += src[i]` along `dim`, on a fresh copy of `self`.
+    /// `indices` is `I64` on the CPU; `src` lives on `self`'s device.
     pub fn index_add(&self, dim: usize, indices: &Tensor, src: &Tensor) -> Result<Tensor> {
-        let out = dispatch_index(self, |be, t| be.index_add(t, dim, indices, src))?;
+        same_device(self, src, "index_add")?;
+        let out = dispatch_index(self, &[indices, src], |be, t, extra| {
+            be.index_add(t, dim, &extra[0], &extra[1])
+        })?;
         let idx = indices.clone();
         Ok(record(out, vec![self.clone(), src.clone()], move |g| {
             Ok(vec![Some(g.clone()), Some(g.index_select(dim, &idx)?)])
@@ -579,17 +585,27 @@ fn normalize_axes(axes: &[usize], ndim: usize, op: &'static str) -> Result<Vec<u
 }
 
 /// Run an index op on the tensor's backend, falling back to a CPU
-/// round-trip when the backend declines.
+/// round-trip when the backend declines. Every tensor operand — the
+/// indices and, for `index_add`, the source — takes the round-trip too:
+/// moving only `t` left `src` on the device and failed the CPU backend
+/// with a DeviceMismatch inside the `narrow` VJP (found by oxmega's
+/// k-DPP loss on CUDA).
 fn dispatch_index(
     t: &Tensor,
-    f: impl Fn(&dyn Backend, &Tensor) -> Result<Tensor>,
+    extra: &[&Tensor],
+    f: impl Fn(&dyn Backend, &Tensor, &[Tensor]) -> Result<Tensor>,
 ) -> Result<Tensor> {
     let backend = backend_for(t.device())?;
-    match f(backend.as_ref(), t) {
+    let on_device: Vec<Tensor> = extra.iter().map(|e| (*e).clone()).collect();
+    match f(backend.as_ref(), t, &on_device) {
         Err(Error::NotImplemented { .. }) if t.device() != Device::Cpu => {
             let cpu = backend.download(t)?;
+            let cpu_extra: Vec<Tensor> = extra
+                .iter()
+                .map(|e| e.to_device(Device::Cpu))
+                .collect::<Result<_>>()?;
             let cpu_backend = backend_for(Device::Cpu)?;
-            let out = f(cpu_backend.as_ref(), &cpu)?;
+            let out = f(cpu_backend.as_ref(), &cpu, &cpu_extra)?;
             backend_for(t.device())?.upload(&out)
         }
         other => other,

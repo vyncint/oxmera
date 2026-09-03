@@ -1,4 +1,4 @@
-//! `CudaBackend`: one context, one stream, one module of five kernels.
+//! `CudaBackend`: one context, one stream, one module of seven kernels.
 //!
 //! Every launch goes through [`CudaBackend::launch`], which pairs a kernel
 //! name with the argument list its CUDA C signature expects; the
@@ -31,6 +31,8 @@ const KERNEL_NAMES: &[&str] = &[
     "reduce_axis",
     "reduce_full_partials",
     "matmul_tiled",
+    "gather_dim",
+    "scatter_add_dim",
 ];
 const MAX_RANK: usize = 8;
 const BLOCK: u32 = 256;
@@ -128,6 +130,11 @@ pub fn is_driver_present() -> bool {
 /// machine has no CUDA at all; loud only when a device is present but the
 /// kernels cannot be loaded, which is a bug worth seeing.
 pub fn register_default() {
+    // Idempotent, like the Metal backend's: a registered device keeps its
+    // backend (and its context and stream).
+    if oxmera_tensor::backend::backend_for(Device::Cuda { index: 0 }).is_ok() {
+        return;
+    }
     if !is_driver_present() {
         return;
     }
@@ -294,6 +301,17 @@ impl CudaBackend {
         Ok(host)
     }
 
+    /// Upload a validated `u32` index list for the gather/scatter kernels
+    /// (a one-element placeholder when empty; CUDA rejects zero bytes).
+    fn index_slice(&self, idx: &[u32]) -> Result<CudaSlice<u32>> {
+        if idx.is_empty() {
+            return self.stream.alloc_zeros::<u32>(1).map_err(drv("cuda alloc"));
+        }
+        self.stream
+            .clone_htod(idx)
+            .map_err(drv("cuda index upload"))
+    }
+
     /// Strided-to-contiguous copy through the identity unary kernel.
     fn copy_strided(&self, a: &Tensor) -> Result<Tensor> {
         let input = self.buf_of(a, "contiguous")?;
@@ -352,6 +370,23 @@ fn reduce_opcode(op: ReduceOp, ctx: &'static str) -> Result<u32> {
             detail: format!("cuda kernel for {op:?}"),
         }),
     }
+}
+
+/// Validate an `I64` index tensor against `extent` and pack it as `u32`.
+/// Indices live on the host (this backend carries `f32` only).
+fn index_list(indices: &Tensor, extent: usize, shape: &Shape) -> Result<Vec<u32>> {
+    let idx = indices.to_device(Device::Cpu)?.to_vec_i64()?;
+    let mut out = Vec::with_capacity(idx.len());
+    for &i in &idx {
+        if i < 0 || i as usize >= extent {
+            return Err(Error::IndexOutOfBounds {
+                index: vec![i.max(0) as usize],
+                shape: shape.clone(),
+            });
+        }
+        out.push(i as u32);
+    }
+    Ok(out)
 }
 
 fn split_axes(dims: &[usize], axes: &[usize], keepdim: bool) -> (Vec<usize>, Vec<usize>) {
@@ -546,6 +581,80 @@ impl Backend for CudaBackend {
         let slice = self.buf_of(&contiguous, "to_cpu")?;
         let data = self.read_f32(slice, contiguous.numel())?;
         Tensor::from_vec_f32(data, a.shape().clone())
+    }
+
+    fn index_select(&self, a: &Tensor, dim: usize, indices: &Tensor) -> Result<Tensor> {
+        let dims = a.dims();
+        if dim >= dims.len() {
+            return Err(Error::InvalidArgument {
+                op: "index_select",
+                detail: format!("dim {dim} out of range for rank {}", dims.len()),
+            });
+        }
+        let input = self.buf_of(a, "index_select")?;
+        let idx = index_list(indices, dims[dim], a.shape())?;
+        let mut out_dims = dims.to_vec();
+        out_dims[dim] = idx.len();
+        let out_shape = Shape::new(out_dims);
+        let out_numel = out_shape.numel();
+        let mut out = self.alloc_out(out_numel)?;
+        if out_numel > 0 {
+            let idx_dev = self.index_slice(&idx)?;
+            let meta = TensorMeta::from_layout(a.layout(), "index_select")?;
+            let (d, l, n) = (dim as u32, idx.len() as u32, out_numel as u32);
+            let mut b = self.builder("gather_dim");
+            b.arg(input)
+                .arg(&idx_dev)
+                .arg(&mut out)
+                .arg(&meta)
+                .arg(&d)
+                .arg(&l)
+                .arg(&n);
+            self.run(b, Self::linear(out_numel), "gather_dim")?;
+        }
+        self.wrap(out, out_shape)
+    }
+
+    fn index_add(&self, a: &Tensor, dim: usize, indices: &Tensor, src: &Tensor) -> Result<Tensor> {
+        let dims = a.dims();
+        if dim >= dims.len() {
+            return Err(Error::InvalidArgument {
+                op: "index_add",
+                detail: format!("dim {dim} out of range for rank {}", dims.len()),
+            });
+        }
+        let idx = index_list(indices, dims[dim], a.shape())?;
+        let mut expected = dims.to_vec();
+        expected[dim] = idx.len();
+        if src.dims() != expected.as_slice() {
+            return Err(Error::ShapeMismatch {
+                expected: Shape::new(expected),
+                got: src.shape().clone(),
+                op: "index_add",
+            });
+        }
+        let ab = self.buf_of(a, "index_add")?;
+        let sb = self.buf_of(src, "index_add")?;
+        let numel = a.numel();
+        let mut out = self.alloc_out(numel)?;
+        if numel > 0 {
+            let idx_dev = self.index_slice(&idx)?;
+            let ma = TensorMeta::from_layout(a.layout(), "index_add")?;
+            let ms = TensorMeta::from_layout(src.layout(), "index_add")?;
+            let (d, l, n) = (dim as u32, idx.len() as u32, numel as u32);
+            let mut b = self.builder("scatter_add_dim");
+            b.arg(ab)
+                .arg(sb)
+                .arg(&idx_dev)
+                .arg(&mut out)
+                .arg(&ma)
+                .arg(&ms)
+                .arg(&d)
+                .arg(&l)
+                .arg(&n);
+            self.run(b, Self::linear(numel), "scatter_add_dim")?;
+        }
+        self.wrap(out, a.shape().clone())
     }
 
     fn upload(&self, a: &Tensor) -> Result<Tensor> {

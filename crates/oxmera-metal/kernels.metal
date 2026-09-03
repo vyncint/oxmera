@@ -1,5 +1,5 @@
 // oxmera Metal kernels: strided elementwise, axis reductions, threadgroup
-// full reduction, and tiled matmul. f32 throughout; strided access is
+// full reduction, tiled matmul, and gather/scatter along one dimension. f32 throughout; strided access is
 // described by TensorMeta (dims/strides/offset up to rank 8), with
 // stride 0 encoding broadcast dimensions.
 
@@ -203,4 +203,65 @@ kernel void matmul_tiled(
     if (row < m && col < n) {
         c[c_base + row * n + col] = acc;
     }
+}
+
+// ---- gather / scatter ------------------------------------------------------
+
+// index_select along `dim`: output is the source with dimension `dim`
+// replaced by the selected rows, contiguous. Element gid of the output
+// decomposes as (outer, k, inner); the source row is idx[k]. The source
+// may be strided (meta), so nothing is copied first.
+kernel void gather_dim(
+    device const float *input [[buffer(0)]],
+    device const uint *idx [[buffer(1)]],
+    device float *output [[buffer(2)]],
+    constant TensorMeta &meta [[buffer(3)]],
+    constant uint &dim [[buffer(4)]],
+    constant uint &idx_len [[buffer(5)]],
+    constant uint &out_numel [[buffer(6)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (gid >= out_numel) return;
+    uint inner = 1;
+    for (uint d = dim + 1; d < meta.rank; d++) inner *= meta.dims[d];
+    uint nd = meta.dims[dim];
+    uint j = gid % inner;
+    uint k = (gid / inner) % idx_len;
+    uint o = gid / (inner * idx_len);
+    uint lin = (o * nd + idx[k]) * inner + j;
+    output[gid] = input[strided_offset(lin, meta)];
+}
+
+// index_add along `dim`: output = a, then output[.., idx[k], ..] += src[.., k, ..]
+// for every k. One thread per OUTPUT element, scanning the index list for
+// hits: deterministic (adds happen in k order, exactly as the CPU
+// reference) and free of atomics, at O(idx_len) per element — the sizes
+// this serves (narrow VJPs, cat/pad, embedding rows) keep idx_len small.
+kernel void scatter_add_dim(
+    device const float *a [[buffer(0)]],
+    device const float *src [[buffer(1)]],
+    device const uint *idx [[buffer(2)]],
+    device float *output [[buffer(3)]],
+    constant TensorMeta &ma [[buffer(4)]],
+    constant TensorMeta &ms [[buffer(5)]],
+    constant uint &dim [[buffer(6)]],
+    constant uint &idx_len [[buffer(7)]],
+    constant uint &numel [[buffer(8)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (gid >= numel) return;
+    uint inner = 1;
+    for (uint d = dim + 1; d < ma.rank; d++) inner *= ma.dims[d];
+    uint nd = ma.dims[dim];
+    uint j = gid % inner;
+    uint t = (gid / inner) % nd;
+    uint o = gid / (inner * nd);
+    float acc = a[strided_offset(gid, ma)];
+    for (uint k = 0; k < idx_len; k++) {
+        if (idx[k] == t) {
+            uint src_lin = (o * idx_len + k) * inner + j;
+            acc += src[strided_offset(src_lin, ms)];
+        }
+    }
+    output[gid] = acc;
 }
