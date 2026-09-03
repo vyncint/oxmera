@@ -308,6 +308,39 @@ pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
     })
 }
 
+/// One Adam/AdamW update for a single parameter, for backends that fuse
+/// the ~12 elementwise ops of the composite step into one launch
+/// ([`Backend::adam_step`]). Tensors are `f32` on the backend's device;
+/// `m`/`v` are `None` on the first step.
+#[derive(Debug, Clone, Copy)]
+pub struct AdamStep<'a> {
+    /// Current parameter value.
+    pub param: &'a Tensor,
+    /// Its gradient.
+    pub grad: &'a Tensor,
+    /// First-moment state, if any step has run.
+    pub m: Option<&'a Tensor>,
+    /// Second-moment state, if any step has run.
+    pub v: Option<&'a Tensor>,
+    /// Learning rate.
+    pub lr: f32,
+    /// β₁.
+    pub beta1: f32,
+    /// β₂.
+    pub beta2: f32,
+    /// ε added to the denominator.
+    pub eps: f32,
+    /// Weight decay; `0.0` disables it.
+    pub weight_decay: f32,
+    /// `true` for AdamW (decay the weights), `false` for Adam (add to the
+    /// gradient).
+    pub decoupled: bool,
+    /// `1 - β₁ᵗ` for this step.
+    pub bias_correction1: f32,
+    /// `1 - β₂ᵗ` for this step.
+    pub bias_correction2: f32,
+}
+
 /// A complete backend: every primitive the tensor method layer dispatches.
 ///
 /// Composite operations (mean, softmax, losses, convolution, …) are built
@@ -390,6 +423,19 @@ pub trait Backend: Send + Sync {
         Err(Error::NotImplemented {
             op: "eigh",
             detail: format!("backend {}", a.device().kind_name()),
+        })
+    }
+
+    /// One fused Adam/AdamW update: returns the new `(param, m, v)`.
+    ///
+    /// The optimizer calls this for parameters on a non-CPU device and
+    /// falls back to the composite elementwise step when the backend
+    /// declines, so the observable update is the same either way (within
+    /// `f32` rounding of the same formula).
+    fn adam_step(&self, step: &AdamStep<'_>) -> Result<(Tensor, Tensor, Tensor)> {
+        Err(Error::NotImplemented {
+            op: "adam_step",
+            detail: format!("backend {}", step.param.device().kind_name()),
         })
     }
 }

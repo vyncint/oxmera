@@ -11,8 +11,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use oxmera_core::{Error, Result};
+use oxmera_core::{Device, Error, Result};
 use oxmera_nn::Param;
+use oxmera_tensor::backend::{AdamStep, backend_for};
 use oxmera_tensor::no_grad;
 use oxmera_tensor::tensor::Tensor;
 
@@ -185,6 +186,34 @@ impl AdamCore {
                 for (i, param) in group.params.iter().enumerate() {
                     let mut value = param.value().detach();
                     let mut grad = grad_of(param)?;
+                    // A GPU backend fuses the whole update into one launch;
+                    // the composite path below is the reference it must match.
+                    if value.device() != Device::Cpu {
+                        let step = AdamStep {
+                            param: &value,
+                            grad: &grad,
+                            m: self.m[gi][i].as_ref(),
+                            v: self.v[gi][i].as_ref(),
+                            lr: group.lr,
+                            beta1: self.beta1,
+                            beta2: self.beta2,
+                            eps: self.eps,
+                            weight_decay: group.weight_decay,
+                            decoupled: self.decoupled,
+                            bias_correction1: bc1,
+                            bias_correction2: bc2,
+                        };
+                        match backend_for(value.device())?.adam_step(&step) {
+                            Ok((p, m, v)) => {
+                                self.m[gi][i] = Some(m);
+                                self.v[gi][i] = Some(v);
+                                param.set(p);
+                                continue;
+                            }
+                            Err(Error::NotImplemented { .. }) => {}
+                            Err(e) => return Err(e),
+                        }
+                    }
                     if group.weight_decay != 0.0 {
                         if self.decoupled {
                             // AdamW: decay applied to the weights directly.

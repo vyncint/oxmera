@@ -1043,6 +1043,8 @@ dependencies = [
  "cudarc",
  "libloading",
  "oxmera-core",
+ "oxmera-nn",
+ "oxmera-optim",
  "oxmera-tensor",
 ]
 
@@ -1053,6 +1055,8 @@ dependencies = [
  "ctor",
  "metal",
  "oxmera-core",
+ "oxmera-nn",
+ "oxmera-optim",
  "oxmera-tensor",
 ]
 

@@ -443,3 +443,58 @@ fn narrow_backward_runs_on_the_device() {
         assert_eq!(*v, want, "element {i}");
     }
 }
+
+/// The fused Adam/AdamW step (issue #28) must reproduce the composite
+/// CPU update — with and without decoupled decay, on the first step (no
+/// state) and after several — within f32 rounding of the same formula.
+#[test]
+fn fused_adam_step_matches_the_composite_cpu_optimizer() {
+    use oxmera_nn::Param;
+    use oxmera_optim::{Adam, AdamW, Optimizer, ParamGroup};
+    let device = metal();
+    for decoupled in [false, true] {
+        let init = Tensor::randn_with_seed([6, 7], 71);
+        let w_cpu = Param::new(init.clone());
+        let w_gpu = Param::new(init.to_device(device).unwrap());
+        let mk = |p: Param| -> Box<dyn Optimizer> {
+            let groups = vec![ParamGroup::new(vec![p], 0.05, 0.1)];
+            if decoupled {
+                Box::new(AdamW::with_groups(groups))
+            } else {
+                Box::new(Adam::with_groups(groups))
+            }
+        };
+        let mut o_cpu = mk(w_cpu.clone());
+        let mut o_gpu = mk(w_gpu.clone());
+        for step in 0..4 {
+            for w in [&w_cpu, &w_gpu] {
+                // loss = Σ (w * seed)², a different gradient per element and step.
+                let scale = Tensor::randn_with_seed([6, 7], 80 + step)
+                    .to_device(w.value().device())
+                    .unwrap();
+                let v = w.value();
+                let l = v.mul(&scale).unwrap();
+                l.mul(&l).unwrap().sum(&[0, 1]).unwrap().backward().unwrap();
+            }
+            o_cpu.step().unwrap();
+            o_gpu.step().unwrap();
+            o_cpu.zero_grad();
+            o_gpu.zero_grad();
+            assert_eq!(
+                w_gpu.value().device(),
+                device,
+                "parameter stays on the device"
+            );
+            assert_close(
+                &w_cpu.value().to_vec_f32().unwrap(),
+                &w_gpu
+                    .value()
+                    .to_device(Device::Cpu)
+                    .unwrap()
+                    .to_vec_f32()
+                    .unwrap(),
+                &format!("adam decoupled={decoupled} step {step}"),
+            );
+        }
+    }
+}

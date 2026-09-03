@@ -10,7 +10,7 @@ use metal::{
 use oxmera_core::shape::broadcast_shapes;
 use oxmera_core::{DType, Device, Error, Layout, Result, Shape};
 use oxmera_tensor::backend::{
-    Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, plan_matmul, register_backend,
+    AdamStep, Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, plan_matmul, register_backend,
 };
 use oxmera_tensor::storage::{MetalBuffer, Storage, StorageData};
 use oxmera_tensor::tensor::Tensor;
@@ -194,7 +194,52 @@ const PIPELINE_NAMES: &[&str] = &[
     "matmul_tiled",
     "gather_dim",
     "scatter_add_dim",
+    "adam_step",
 ];
+
+/// Host mirror of `struct AdamArgs` in `kernels.metal`/`kernels.cu`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct AdamArgs {
+    lr: f32,
+    beta1: f32,
+    beta2: f32,
+    eps: f32,
+    weight_decay: f32,
+    bc1: f32,
+    bc2: f32,
+    decoupled: u32,
+    has_state: u32,
+    numel: u32,
+}
+
+impl AdamArgs {
+    fn new(step: &AdamStep<'_>, numel: usize) -> Self {
+        Self {
+            lr: step.lr,
+            beta1: step.beta1,
+            beta2: step.beta2,
+            eps: step.eps,
+            weight_decay: step.weight_decay,
+            bc1: step.bias_correction1,
+            bc2: step.bias_correction2,
+            decoupled: u32::from(step.decoupled),
+            has_state: u32::from(step.m.is_some() && step.v.is_some()),
+            numel: numel as u32,
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        // SAFETY: #[repr(C)], ten four-byte fields, no padding (40 bytes).
+        #[allow(unsafe_code)]
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const AdamArgs).cast::<u8>(),
+                std::mem::size_of::<AdamArgs>(),
+            )
+        }
+    }
+}
 
 impl MetalBackend {
     /// Compile the kernel library and build every pipeline on `device`.
@@ -694,6 +739,59 @@ impl Backend for MetalBackend {
             );
         }
         self.wrap(out, a.shape().clone())
+    }
+
+    fn adam_step(&self, step: &AdamStep<'_>) -> Result<(Tensor, Tensor, Tensor)> {
+        let numel = step.param.numel();
+        if step.grad.dims() != step.param.dims() {
+            return Err(Error::ShapeMismatch {
+                expected: step.param.shape().clone(),
+                got: step.grad.shape().clone(),
+                op: "adam_step",
+            });
+        }
+        // Contiguous, offset-free inputs: the kernel indexes linearly.
+        let dense = |t: &Tensor| -> Result<Tensor> {
+            if t.layout().is_contiguous() && t.layout().offset == 0 {
+                Ok(t.clone())
+            } else {
+                self.copy_strided(t)
+            }
+        };
+        let p = dense(step.param)?;
+        let g = dense(step.grad)?;
+        let (m, v) = match (step.m, step.v) {
+            (Some(m), Some(v)) => (dense(m)?, dense(v)?),
+            // First step: the kernel ignores these; hand it the parameter
+            // buffer so every binding is a real allocation.
+            _ => (p.clone(), p.clone()),
+        };
+        let pb = self.buffer_of(&p, "adam_step")?;
+        let gb = self.buffer_of(&g, "adam_step")?;
+        let mb = self.buffer_of(&m, "adam_step")?;
+        let vb = self.buffer_of(&v, "adam_step")?;
+        let (p_out, m_out, v_out) = (
+            self.alloc_out(numel),
+            self.alloc_out(numel),
+            self.alloc_out(numel),
+        );
+        if numel > 0 {
+            let args = AdamArgs::new(step, numel);
+            let (grid, group) = self.linear_grid(numel);
+            self.run_sync(
+                "adam_step",
+                &[pb, gb, mb, vb, &p_out, &m_out, &v_out],
+                &[args.as_bytes()],
+                grid,
+                group,
+            );
+        }
+        let shape = step.param.shape().clone();
+        Ok((
+            self.wrap(p_out, shape.clone())?,
+            self.wrap(m_out, shape.clone())?,
+            self.wrap(v_out, shape)?,
+        ))
     }
 
     fn upload(&self, a: &Tensor) -> Result<Tensor> {

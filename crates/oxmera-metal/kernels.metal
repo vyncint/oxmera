@@ -205,6 +205,54 @@ kernel void matmul_tiled(
     }
 }
 
+// ---- optimizer ---------------------------------------------------------------
+
+// Scalars of one fused Adam/AdamW step; layout shared with the host-side
+// `AdamArgs` (10 four-byte words).
+struct AdamArgs {
+    float lr;
+    float beta1;
+    float beta2;
+    float eps;
+    float weight_decay;
+    float bc1;        // 1 - beta1^t
+    float bc2;        // 1 - beta2^t
+    uint decoupled;   // 1: AdamW (decay the weights), 0: Adam (L2 on the gradient)
+    uint has_state;   // 0 on the first step: m/v inputs are ignored
+    uint numel;
+};
+
+// The composite step's formula, one thread per element, three outputs.
+// Inputs contiguous (the host makes them so).
+kernel void adam_step(
+    device const float *p_in [[buffer(0)]],
+    device const float *g_in [[buffer(1)]],
+    device const float *m_in [[buffer(2)]],
+    device const float *v_in [[buffer(3)]],
+    device float *p_out [[buffer(4)]],
+    device float *m_out [[buffer(5)]],
+    device float *v_out [[buffer(6)]],
+    constant AdamArgs &a [[buffer(7)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (gid >= a.numel) return;
+    float p = p_in[gid];
+    float g = g_in[gid];
+    if (a.weight_decay != 0.0f) {
+        if (a.decoupled != 0) p = p * (1.0f - a.lr * a.weight_decay);
+        else g = g + p * a.weight_decay;
+    }
+    float m = a.has_state != 0 ? m_in[gid] * a.beta1 + g * (1.0f - a.beta1) : g * (1.0f - a.beta1);
+    float g2 = g * g;
+    float v = a.has_state != 0 ? v_in[gid] * a.beta2 + g2 * (1.0f - a.beta2) : g2 * (1.0f - a.beta2);
+    float m_hat = m * (1.0f / a.bc1);
+    float v_hat = v * (1.0f / a.bc2);
+    float update = m_hat / (sqrt(v_hat) + a.eps);
+    p_out[gid] = p - update * a.lr;
+    m_out[gid] = m;
+    v_out[gid] = v;
+}
+
 // ---- gather / scatter ------------------------------------------------------
 
 // index_select along `dim`: output is the source with dimension `dim`

@@ -1,4 +1,4 @@
-//! `CudaBackend`: one context, one stream, one module of seven kernels.
+//! `CudaBackend`: one context, one stream, one module of eight kernels.
 //!
 //! Every launch goes through [`CudaBackend::launch`], which pairs a kernel
 //! name with the argument list its CUDA C signature expects; the
@@ -15,7 +15,7 @@ use cudarc::nvrtc::Ptx;
 use oxmera_core::shape::broadcast_shapes;
 use oxmera_core::{DType, Device, Error, Layout, Result, Shape};
 use oxmera_tensor::backend::{
-    Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, plan_matmul, register_backend,
+    AdamStep, Backend, BinaryOp, MatmulPlan, ReduceOp, UnaryOp, plan_matmul, register_backend,
 };
 use oxmera_tensor::storage::{OpaqueBuffer, Storage};
 use oxmera_tensor::tensor::Tensor;
@@ -33,7 +33,29 @@ const KERNEL_NAMES: &[&str] = &[
     "matmul_tiled",
     "gather_dim",
     "scatter_add_dim",
+    "adam_step",
 ];
+
+/// Host mirror of `struct AdamArgs` in `kernels.cu` (ten four-byte words).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct AdamArgs {
+    lr: f32,
+    beta1: f32,
+    beta2: f32,
+    eps: f32,
+    weight_decay: f32,
+    bc1: f32,
+    bc2: f32,
+    decoupled: u32,
+    has_state: u32,
+    numel: u32,
+}
+
+// SAFETY: `#[repr(C)]`, ten four-byte scalar fields with no padding (40
+// bytes), matching the device-side struct byte for byte.
+#[allow(unsafe_code)]
+unsafe impl DeviceRepr for AdamArgs {}
 const MAX_RANK: usize = 8;
 const BLOCK: u32 = 256;
 /// Full reductions at or above this size use the two-stage block kernel.
@@ -655,6 +677,67 @@ impl Backend for CudaBackend {
             self.run(b, Self::linear(numel), "scatter_add_dim")?;
         }
         self.wrap(out, a.shape().clone())
+    }
+
+    fn adam_step(&self, step: &AdamStep<'_>) -> Result<(Tensor, Tensor, Tensor)> {
+        let numel = step.param.numel();
+        if step.grad.dims() != step.param.dims() {
+            return Err(Error::ShapeMismatch {
+                expected: step.param.shape().clone(),
+                got: step.grad.shape().clone(),
+                op: "adam_step",
+            });
+        }
+        let dense = |t: &Tensor| -> Result<Tensor> {
+            if t.layout().is_contiguous() && t.layout().offset == 0 {
+                Ok(t.clone())
+            } else {
+                self.copy_strided(t)
+            }
+        };
+        let p = dense(step.param)?;
+        let g = dense(step.grad)?;
+        let (m, v) = match (step.m, step.v) {
+            (Some(m), Some(v)) => (dense(m)?, dense(v)?),
+            _ => (p.clone(), p.clone()),
+        };
+        let pb = self.buf_of(&p, "adam_step")?;
+        let gb = self.buf_of(&g, "adam_step")?;
+        let mb = self.buf_of(&m, "adam_step")?;
+        let vb = self.buf_of(&v, "adam_step")?;
+        let mut p_out = self.alloc_out(numel)?;
+        let mut m_out = self.alloc_out(numel)?;
+        let mut v_out = self.alloc_out(numel)?;
+        if numel > 0 {
+            let args = AdamArgs {
+                lr: step.lr,
+                beta1: step.beta1,
+                beta2: step.beta2,
+                eps: step.eps,
+                weight_decay: step.weight_decay,
+                bc1: step.bias_correction1,
+                bc2: step.bias_correction2,
+                decoupled: u32::from(step.decoupled),
+                has_state: u32::from(step.m.is_some() && step.v.is_some()),
+                numel: numel as u32,
+            };
+            let mut b = self.builder("adam_step");
+            b.arg(pb)
+                .arg(gb)
+                .arg(mb)
+                .arg(vb)
+                .arg(&mut p_out)
+                .arg(&mut m_out)
+                .arg(&mut v_out)
+                .arg(&args);
+            self.run(b, Self::linear(numel), "adam_step")?;
+        }
+        let shape = step.param.shape().clone();
+        Ok((
+            self.wrap(p_out, shape.clone())?,
+            self.wrap(m_out, shape.clone())?,
+            self.wrap(v_out, shape)?,
+        ))
     }
 
     fn upload(&self, a: &Tensor) -> Result<Tensor> {
