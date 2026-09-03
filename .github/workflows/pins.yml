@@ -1,4 +1,9 @@
-# Watches the four pins' upstreams and opens an issue when one moves.
+# Watches the pins' upstreams and opens an issue when one moves. The
+# reconverge/launchbound/termlens pins are compared with crates.io; the
+# cuda-oxide and nightly pins are compared with what the PINNED reconverge
+# release verifies, because a rustc-driver tool and the cuda-oxide it
+# analyses must share one nightly — upstream cuda-oxide HEAD is not a
+# target this project can take on its own (see CONTRIBUTING.md).
 # It NEVER bumps anything — the pins move together, by hand, one bump per
 # commit, per the policy in CONTRIBUTING.md.
 
@@ -47,14 +52,29 @@ jobs:
           tl=$(latest termlens)
           [ "$tl" = "$PIN_TERMLENS" ] || { drift="$drift- termlens: pinned $PIN_TERMLENS, crates.io has $tl\n"; fingerprint="$fingerprint termlens@$tl"; }
 
+          # cuda-oxide is not compared with upstream HEAD: reconverge is a
+          # rustc driver and must be built by the nightly cuda-oxide needs,
+          # so the only cuda-oxide rev this project can take is the one the
+          # pinned reconverge release records as verified (conformance/PIN)
+          # on the nightly its rust-toolchain.toml names. Upstream HEAD is
+          # reported for information only — it moved 155 commits and to a
+          # newer nightly while reconverge 0.4.0 stayed on a766fc26 (#23).
+          rc_raw="https://raw.githubusercontent.com/vyncint/reconverge/v${PIN_RECONVERGE}"
+          verified=$(curl -sf -A "$ua" "$rc_raw/conformance/PIN" | grep -E '^[0-9a-f]{40} ' | cut -c1-8)
+          rc_nightly=$(curl -sf -A "$ua" "$rc_raw/rust-toolchain.toml" | sed -nE 's/^channel = "([^"]+)"/\1/p')
+          [ -n "$verified" ] && [ -n "$rc_nightly" ] || { echo "::error::could not read reconverge v${PIN_RECONVERGE}'s pin files"; exit 1; }
+          [ "$verified" = "$PIN_CUDA_OXIDE" ] || { drift="$drift- cuda-oxide: pinned $PIN_CUDA_OXIDE, reconverge $PIN_RECONVERGE verifies $verified\n"; fingerprint="$fingerprint cuda-oxide@$verified"; }
+          [ "$rc_nightly" = "$PIN_NIGHTLY" ] || { drift="$drift- nightly: pinned $PIN_NIGHTLY, reconverge $PIN_RECONVERGE is built on $rc_nightly\n"; fingerprint="$fingerprint nightly@$rc_nightly"; }
+
           head=$(git ls-remote https://github.com/NVlabs/cuda-oxide HEAD | cut -c1-8)
-          [ "$head" = "$PIN_CUDA_OXIDE" ] || { drift="$drift- cuda-oxide: pinned $PIN_CUDA_OXIDE, upstream HEAD is $head\n"; fingerprint="$fingerprint cuda-oxide@$head"; }
+          info="cuda-oxide upstream HEAD is $head (informational: reconverge $PIN_RECONVERGE verifies $verified on $rc_nightly, so HEAD is not a bump target)"
 
           {
             echo "drift<<EOF"
             printf '%b' "$drift"
             echo "EOF"
             echo "fingerprint=${fingerprint# }"
+            echo "info=$info"
           } >> "$GITHUB_OUTPUT"
 
       - name: Open (or skip) the drift issue
@@ -62,6 +82,7 @@ jobs:
         env:
           DRIFT: ${{ steps.drift.outputs.drift }}
           FINGERPRINT: ${{ steps.drift.outputs.fingerprint }}
+          INFO: ${{ steps.drift.outputs.info }}
         run: |
           set -euo pipefail
           # The fingerprint keys the issue to this exact upstream state, so
@@ -79,11 +100,12 @@ jobs:
             echo
             printf '%s\n' "$DRIFT"
             echo
+            echo "$INFO"
+            echo
             echo "The four pins (nightly \`$PIN_NIGHTLY\`, reconverge \`$PIN_RECONVERGE\`, cuda-oxide \`$PIN_CUDA_OXIDE\`, launchbound \`$PIN_LAUNCHBOUND\`) move together or not at all, one bump per commit, no behaviour change riding along. A bump must touch, together:"
             echo
             echo "- \`research/rust-toolchain.toml\` (nightly)"
             echo "- the \`cuda-device\` rev in the research workspace manifests"
-            
             echo "- the pin table in \`ARCHITECTURE.md\` and \`CONTRIBUTING.md\`"
             echo "- the enumerated family ban lists in \`deny.toml\` (bans are exact names)"
             echo "- \`docs/research-baseline.md\` must be re-measured, not edited"

@@ -61,6 +61,18 @@ names, so any crate the new version adds to a family must be added there.
 If a bump changes a measured baseline, `docs/research-baseline.md` must be
 re-measured, not edited.
 
+The cuda-oxide bump target is **not upstream HEAD**. reconverge is a rustc
+driver and must be built by the same nightly cuda-oxide needs, so the only
+cuda-oxide rev this project can take is the one the pinned reconverge
+release records as verified (`conformance/PIN` and `rust-toolchain.toml`
+in its tag). The pins watch (`.github/workflows/pins.yml`) compares against
+that and reports upstream HEAD for information only; when HEAD needs a
+newer nightly than reconverge is built on, the pin waits for a reconverge
+release, not the other way round.
+
+`termlens` (currently 0.8.0) pairs with nothing and moves alone, in its own
+commit, gated by the PTY suites and both 100-iteration stresses.
+
 ## Testing policy
 
 - Unit tests on everything with a shape; property tests (`proptest`) where a
