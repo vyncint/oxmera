@@ -404,6 +404,31 @@ impl Backend for CpuBackend {
         }
         Tensor::from_vec_f32(out, a.shape().clone())
     }
+
+    fn cholesky(&self, a: &Tensor) -> Result<Tensor> {
+        f32_input(a, "cholesky")?;
+        let d = a.dims();
+        let n = d[d.len() - 1];
+        let batch: usize = d[..d.len() - 2].iter().product();
+        let data = a.to_vec_f32()?;
+        let l = crate::cpu_linalg::cholesky(&data, batch, n)?;
+        Tensor::from_vec_f32(l, a.shape().clone())
+    }
+
+    fn eigh(&self, a: &Tensor) -> Result<(Tensor, Tensor)> {
+        f32_input(a, "eigh")?;
+        let d = a.dims();
+        let n = d[d.len() - 1];
+        let batch: usize = d[..d.len() - 2].iter().product();
+        let data = a.to_vec_f32()?;
+        let (w, v) = crate::cpu_linalg::eigh(&data, batch, n);
+        let mut wshape = d[..d.len() - 1].to_vec();
+        wshape[d.len() - 2] = n;
+        Ok((
+            Tensor::from_vec_f32(w, Shape::new(wshape))?,
+            Tensor::from_vec_f32(v, a.shape().clone())?,
+        ))
+    }
 }
 
 /// Apply `f` element-by-element over a strided tensor into `out`.

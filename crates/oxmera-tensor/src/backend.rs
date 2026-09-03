@@ -370,6 +370,28 @@ pub trait Backend: Send + Sync {
             detail: format!("backend {}", a.device().kind_name()),
         })
     }
+
+    /// Lower-triangular Cholesky factors of a `[.., n, n]` batch of SPD
+    /// matrices (lower triangle read; a non-PD matrix is a typed error).
+    ///
+    /// Same fallback contract as [`Backend::index_select`].
+    fn cholesky(&self, a: &Tensor) -> Result<Tensor> {
+        Err(Error::NotImplemented {
+            op: "cholesky",
+            detail: format!("backend {}", a.device().kind_name()),
+        })
+    }
+
+    /// Symmetric eigen-decomposition of a `[.., n, n]` batch: eigenvalues
+    /// ascending (`[.., n]`) and eigenvectors as columns (`[.., n, n]`).
+    ///
+    /// Same fallback contract as [`Backend::index_select`].
+    fn eigh(&self, a: &Tensor) -> Result<(Tensor, Tensor)> {
+        Err(Error::NotImplemented {
+            op: "eigh",
+            detail: format!("backend {}", a.device().kind_name()),
+        })
+    }
 }
 
 type Registry = RwLock<HashMap<Device, Arc<dyn Backend>>>;

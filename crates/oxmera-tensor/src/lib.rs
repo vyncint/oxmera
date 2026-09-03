@@ -8,6 +8,8 @@
 //!   `matmul`, `softmax`, …) plus `std::ops` operator sugar.
 //! - [`einsum`] — Einstein-summation contractions lowered onto `matmul`,
 //!   `permute` and `sum`.
+//! - Small batched linear algebra on `Tensor`: `eye`, `diag`, `diag_embed`,
+//!   `trace`, `cholesky`, `logdet`, `det`, `eigh`.
 //! - [`backend`] — the op vocabulary ([`backend::UnaryOp`],
 //!   [`backend::BinaryOp`], [`backend::ReduceOp`]), the [`backend::Backend`]
 //!   trait every device implements, and the registry that resolves a
@@ -28,8 +30,10 @@ pub mod autograd;
 pub mod backend;
 pub mod cpu;
 mod cpu_iter;
+mod cpu_linalg;
 mod cpu_matmul;
 mod einsum;
+mod linalg;
 pub mod ops;
 pub mod overload;
 pub mod storage;

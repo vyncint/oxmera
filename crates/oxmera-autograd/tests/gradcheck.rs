@@ -364,3 +364,83 @@ fn einsum_gradients_check() {
     oxmera_autograd::gradcheck(|i| einsum("i,i->", &[&i[0], &i[1]]), &[u, v], 1e-3, 2e-2)
         .expect("i,i->");
 }
+
+/// Linear algebra (issue #26): diag/trace are composites; cholesky carries
+/// Murray's VJP and logdet's gradient must come out as A⁻¹ (symmetrized).
+#[test]
+fn linalg_gradients_check() {
+    use oxmera_tensor::tensor::Tensor;
+    let m = Tensor::randn_with_seed([2, 4, 4], 51);
+    let spd = m
+        .matmul(&m.t().unwrap())
+        .unwrap()
+        .add(&Tensor::eye(4).mul_scalar(4.0).unwrap())
+        .unwrap();
+    // The check perturbs single elements, which breaks symmetry; feed the
+    // input through a symmetrizer so every probe stays SPD and the
+    // analytic gradient is compared on the symmetric manifold.
+    let sym = |a: &Tensor| a.add(&a.t()?)?.mul_scalar(0.5);
+    oxmera_autograd::gradcheck(
+        |i| {
+            sym(&i[0])?
+                .cholesky()?
+                .mul(&sym(&i[0])?.cholesky()?)?
+                .sum(&[0, 1, 2])
+        },
+        std::slice::from_ref(&spd),
+        1e-2,
+        3e-2,
+    )
+    .expect("cholesky");
+    oxmera_autograd::gradcheck(
+        |i| sym(&i[0])?.logdet()?.sum(&[0]),
+        std::slice::from_ref(&spd),
+        1e-2,
+        3e-2,
+    )
+    .expect("logdet");
+    // d logdet / dA = A⁻¹ for a symmetric A: check against eigh.
+    let a = sym(&spd.narrow(0, 0, 1).unwrap().reshape([4, 4]).unwrap())
+        .unwrap()
+        .detach()
+        .requires_grad_(true);
+    a.logdet().unwrap().backward().unwrap();
+    let g = a.grad().unwrap();
+    let (w, v) = a.eigh().unwrap();
+    let inv_w = Tensor::from_vec_f32(
+        w.to_vec_f32().unwrap().iter().map(|x| 1.0 / x).collect(),
+        [4],
+    )
+    .unwrap();
+    let inv = v
+        .mul(&inv_w.unsqueeze(0).unwrap())
+        .unwrap()
+        .matmul(&v.t().unwrap())
+        .unwrap();
+    for (x, y) in g
+        .to_vec_f32()
+        .unwrap()
+        .iter()
+        .zip(inv.to_vec_f32().unwrap())
+    {
+        assert!((x - y).abs() < 2e-3 * 1.0f32.max(y.abs()), "{x} vs {y}");
+    }
+    oxmera_autograd::gradcheck(
+        |i| i[0].diag()?.mul(&i[0].trace()?.unsqueeze(1)?)?.sum(&[0, 1]),
+        &[Tensor::randn_with_seed([3, 3, 3], 52)],
+        1e-3,
+        2e-2,
+    )
+    .expect("diag/trace");
+    oxmera_autograd::gradcheck(
+        |i| {
+            i[0].diag_embed()?
+                .matmul(&i[0].diag_embed()?)?
+                .sum(&[0, 1, 2])
+        },
+        &[Tensor::randn_with_seed([2, 3], 53)],
+        1e-3,
+        2e-2,
+    )
+    .expect("diag_embed");
+}
