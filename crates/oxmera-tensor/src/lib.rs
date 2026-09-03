@@ -6,6 +6,8 @@
 //! - [`Tensor`] — the value type: constructors, zero-copy strided views,
 //!   element access, and the full differentiable op surface (`add`,
 //!   `matmul`, `softmax`, …) plus `std::ops` operator sugar.
+//! - [`einsum`] — Einstein-summation contractions lowered onto `matmul`,
+//!   `permute` and `sum`.
 //! - [`backend`] — the op vocabulary ([`backend::UnaryOp`],
 //!   [`backend::BinaryOp`], [`backend::ReduceOp`]), the [`backend::Backend`]
 //!   trait every device implements, and the registry that resolves a
@@ -27,6 +29,7 @@ pub mod backend;
 pub mod cpu;
 mod cpu_iter;
 mod cpu_matmul;
+mod einsum;
 pub mod ops;
 pub mod overload;
 pub mod storage;
@@ -34,5 +37,6 @@ pub mod tensor;
 
 pub use autograd::{NoGradGuard, no_grad};
 pub use backend::{Backend, BinaryOp, ReduceOp, UnaryOp, backend_for, register_backend};
+pub use einsum::einsum;
 pub use storage::{CpuStorage, OpaqueBuffer, Storage, StorageData};
 pub use tensor::Tensor;

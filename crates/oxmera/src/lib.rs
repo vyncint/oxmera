@@ -33,4 +33,4 @@ pub use oxmera_tensor as tensor;
 
 pub use oxmera_core::{DType, Device, Error, Layout, Result, Shape, Strides};
 pub use oxmera_runtime::{default_device, init, no_grad};
-pub use oxmera_tensor::{Backend, NoGradGuard, Storage, Tensor};
+pub use oxmera_tensor::{Backend, NoGradGuard, Storage, Tensor, einsum};

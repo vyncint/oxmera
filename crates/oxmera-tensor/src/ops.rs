@@ -307,14 +307,27 @@ impl Tensor {
 
     /// Matrix product with NumPy/PyTorch batch semantics.
     ///
-    /// Operands are rank 2 (`[m, k]`) or rank 3 (`[b, m, k]`); a rank-2
-    /// operand behaves as batch 1, and batch dimensions broadcast (1
-    /// against `b`). The result is rank 2 only when both operands are.
-    /// `[2, 2, 3] x [1, 3, 2]` is `[2, 2, 2]`; `[m, k] x [b, k, n]` is
-    /// `[b, m, n]`. See [`plan_matmul`](crate::backend::plan_matmul) for
-    /// the exact contract every backend implements.
+    /// The last two dimensions are the matrix (`[.., m, k] x [.., k, n]`
+    /// → `[.., m, n]`); every leading dimension is a batch dimension, and
+    /// batch dimensions broadcast against each other (1 against `b`, and
+    /// a missing leading dimension counts as 1). A rank-2 operand is one
+    /// matrix for every batch of the other. The result is rank 2 only
+    /// when both operands are: `[2, 2, 3] x [1, 3, 2]` is `[2, 2, 2]`,
+    /// `[m, k] x [b, k, n]` is `[b, m, n]`, `[2, 1, 3, 4] x [5, 4, 6]` is
+    /// `[2, 5, 3, 6]`.
+    ///
+    /// Backends implement the rank-2/rank-3 contract of
+    /// [`plan_matmul`](crate::backend::plan_matmul); higher ranks are
+    /// lowered here — the batch dimensions are broadcast (a zero-stride
+    /// view, materialized only when an operand's batch really has to be
+    /// repeated), flattened to one batch axis, multiplied, and unflattened
+    /// — and every step is a recorded op, so the gradient needs no VJP of
+    /// its own.
     pub fn matmul(&self, rhs: &Tensor) -> Result<Tensor> {
         let device = same_device(self, rhs, "matmul")?;
+        if self.ndim() > 3 || rhs.ndim() > 3 {
+            return self.matmul_lowered(rhs);
+        }
         let out = backend_for(device)?.matmul(self, rhs)?;
         let (a, b) = (self.clone(), rhs.clone());
         Ok(record(out, vec![self.clone(), rhs.clone()], move |g| {
@@ -327,6 +340,65 @@ impl Tensor {
                 Some(reduce_to_shape(&gb, b.shape())?),
             ])
         }))
+    }
+
+    /// Rank ≥ 4 matmul: broadcast the batch dimensions, flatten them to one,
+    /// run the rank-3 contract, unflatten. Composed from recorded view ops.
+    fn matmul_lowered(&self, rhs: &Tensor) -> Result<Tensor> {
+        let (ad, bd) = (self.dims(), rhs.dims());
+        if ad.len() < 2 || bd.len() < 2 {
+            return Err(Error::InvalidArgument {
+                op: "matmul",
+                detail: format!("operands need rank >= 2; got {}x{}", ad.len(), bd.len()),
+            });
+        }
+        let (m, k) = (ad[ad.len() - 2], ad[ad.len() - 1]);
+        let (kb, n) = (bd[bd.len() - 2], bd[bd.len() - 1]);
+        if k != kb {
+            return Err(Error::ShapeMismatch {
+                expected: Shape::new(bd[..bd.len() - 2].iter().copied().chain([k, n]).collect()),
+                got: rhs.shape().clone(),
+                op: "matmul",
+            });
+        }
+        let a_batch = Shape::new(ad[..ad.len() - 2].to_vec());
+        let b_batch = Shape::new(bd[..bd.len() - 2].to_vec());
+        let batch = oxmera_core::shape::broadcast_shapes(&a_batch, &b_batch).map_err(|_| {
+            Error::BroadcastIncompatible {
+                lhs: self.shape().clone(),
+                rhs: rhs.shape().clone(),
+            }
+        })?;
+        let batch_numel = batch.numel();
+        // An operand whose batch is a single matrix stays rank 2 and lets
+        // the backend broadcast it with a zero batch stride; anything else
+        // is expanded to the full batch and flattened.
+        let lower = |t: &Tensor, own: &Shape, rows: usize, cols: usize| -> Result<Tensor> {
+            if own.numel() == 1 {
+                return t.reshape(Shape::from([rows, cols]));
+            }
+            let full: Vec<usize> = batch.dims().iter().copied().chain([rows, cols]).collect();
+            let expanded = if own.dims() == batch.dims() {
+                t.clone()
+            } else {
+                // Right-align the operand's batch dims under the broadcast
+                // batch, then take the (recorded) zero-stride view.
+                let lead = batch.ndim() - own.ndim();
+                let padded: Vec<usize> = std::iter::repeat_n(1usize, lead)
+                    .chain(own.dims().iter().copied())
+                    .chain([rows, cols])
+                    .collect();
+                t.reshape(Shape::new(padded))?
+                    .broadcast_to(Shape::new(full.clone()))?
+                    .contiguous()?
+            };
+            expanded.reshape(Shape::from([batch_numel, rows, cols]))
+        };
+        let a3 = lower(self, &a_batch, m, k)?;
+        let b3 = lower(rhs, &b_batch, k, n)?;
+        let out = a3.matmul(&b3)?;
+        let out_shape: Vec<usize> = batch.dims().iter().copied().chain([m, n]).collect();
+        out.reshape(Shape::new(out_shape))
     }
 
     // ---- reductions --------------------------------------------------------

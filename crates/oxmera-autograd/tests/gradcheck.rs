@@ -287,3 +287,80 @@ fn matmul_batch_broadcast_gradients_check() {
     )
     .expect("rank-2 left operand");
 }
+
+/// Rank-4 matmul (issue #30): the lowering is composed from recorded view
+/// ops, so a broadcast batch operand's gradient must sum over the batches
+/// it was repeated for, and a rank-2 operand's over every batch.
+#[test]
+fn matmul_rank_four_broadcast_gradients_check() {
+    use oxmera_tensor::tensor::Tensor;
+    let a = Tensor::randn_with_seed([2, 1, 3, 4], 31);
+    let b = Tensor::randn_with_seed([1, 2, 4, 2], 32);
+    oxmera_autograd::gradcheck(
+        |i| i[0].matmul(&i[1])?.sum(&[0, 1, 2, 3]),
+        &[a.clone(), b],
+        1e-3,
+        2e-2,
+    )
+    .expect("rank-4 x rank-4 with broadcast batches");
+    let w = Tensor::randn_with_seed([4, 3], 33);
+    oxmera_autograd::gradcheck(
+        |i| i[0].matmul(&i[1])?.sum(&[0, 1, 2, 3]),
+        &[a.clone(), w],
+        1e-3,
+        2e-2,
+    )
+    .expect("rank-4 x rank-2");
+    let w3 = Tensor::randn_with_seed([2, 4, 3], 34); // right-aligned rank-3
+    oxmera_autograd::gradcheck(
+        |i| i[0].t()?.matmul(&i[1])?.sum(&[0, 1, 2, 3]),
+        &[Tensor::randn_with_seed([2, 2, 4, 3], 35), w3],
+        1e-3,
+        2e-2,
+    )
+    .expect("transposed rank-4 x rank-3");
+}
+
+/// einsum is permute/sum/matmul underneath, so every contraction shape
+/// must be differentiable in both operands.
+#[test]
+fn einsum_gradients_check() {
+    use oxmera_tensor::{einsum, tensor::Tensor};
+    let x = Tensor::randn_with_seed([2, 2, 3, 4], 41);
+    let w = Tensor::randn_with_seed([2, 4, 3], 42);
+    oxmera_autograd::gradcheck(
+        |i| einsum("rbhd,rdo->rbho", &[&i[0], &i[1]])?.sum(&[0, 1, 2, 3]),
+        &[x, w],
+        1e-3,
+        2e-2,
+    )
+    .expect("rbhd,rdo->rbho");
+    let a = Tensor::randn_with_seed([3, 4], 43);
+    let b = Tensor::randn_with_seed([4, 5], 44);
+    oxmera_autograd::gradcheck(
+        |i| {
+            einsum("ij,jk->ki", &[&i[0], &i[1]])?
+                .mul(&i[0].sum(&[])?)?
+                .sum(&[0, 1])
+        },
+        &[a.clone(), b],
+        1e-3,
+        2e-2,
+    )
+    .expect("ij,jk->ki");
+    oxmera_autograd::gradcheck(
+        |i| {
+            einsum("ij->j", &[&i[0]])?
+                .mul(&einsum("ij->j", &[&i[0]])?)?
+                .sum(&[0])
+        },
+        &[a],
+        1e-3,
+        2e-2,
+    )
+    .expect("ij->j");
+    let u = Tensor::randn_with_seed([5], 45);
+    let v = Tensor::randn_with_seed([5], 46);
+    oxmera_autograd::gradcheck(|i| einsum("i,i->", &[&i[0], &i[1]]), &[u, v], 1e-3, 2e-2)
+        .expect("i,i->");
+}
