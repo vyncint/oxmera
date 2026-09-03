@@ -13,6 +13,8 @@ use oxmera_core::{DType, Device, Error, Result};
 pub enum CpuStorage {
     /// 32-bit floats.
     F32(Vec<f32>),
+    /// 64-bit floats (research metrics, normalisers, compensated sums).
+    F64(Vec<f64>),
     /// 64-bit signed integers (indices, argmax results, class targets).
     I64(Vec<i64>),
     /// Raw bytes (`U8`/`Bool`).
@@ -24,6 +26,7 @@ impl CpuStorage {
     pub fn dtype(&self) -> DType {
         match self {
             CpuStorage::F32(_) => DType::F32,
+            CpuStorage::F64(_) => DType::F64,
             CpuStorage::I64(_) => DType::I64,
             CpuStorage::U8(_) => DType::U8,
         }
@@ -33,6 +36,7 @@ impl CpuStorage {
     pub fn len(&self) -> usize {
         match self {
             CpuStorage::F32(v) => v.len(),
+            CpuStorage::F64(v) => v.len(),
             CpuStorage::I64(v) => v.len(),
             CpuStorage::U8(v) => v.len(),
         }
@@ -51,6 +55,18 @@ impl CpuStorage {
                 expected: DType::F32,
                 got: other.dtype(),
                 op: "CpuStorage::f32s",
+            }),
+        }
+    }
+
+    /// The `f64` elements, or a typed error for other dtypes.
+    pub fn f64s(&self) -> Result<&[f64]> {
+        match self {
+            CpuStorage::F64(v) => Ok(v),
+            other => Err(Error::DTypeMismatch {
+                expected: DType::F64,
+                got: other.dtype(),
+                op: "CpuStorage::f64s",
             }),
         }
     }
@@ -182,6 +198,15 @@ impl Storage {
         Self {
             data: StorageData::Cpu(CpuStorage::F32(data)),
             dtype: DType::F32,
+            device: Device::Cpu,
+        }
+    }
+
+    /// CPU storage owning `data` as `f64` elements.
+    pub fn from_f64_vec(data: Vec<f64>) -> Self {
+        Self {
+            data: StorageData::Cpu(CpuStorage::F64(data)),
+            dtype: DType::F64,
             device: Device::Cpu,
         }
     }

@@ -29,6 +29,7 @@
 pub mod autograd;
 pub mod backend;
 pub mod cpu;
+mod cpu_f64;
 mod cpu_iter;
 mod cpu_linalg;
 mod cpu_matmul;

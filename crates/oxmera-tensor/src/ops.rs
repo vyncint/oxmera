@@ -3,7 +3,7 @@
 //! input is tracked, attaches the exact vector-Jacobian product to the
 //! output's tape node.
 
-use oxmera_core::{Device, Error, Result, Shape};
+use oxmera_core::{DType, Device, Error, Result, Shape};
 
 use crate::autograd::{GradFn, is_recording};
 use crate::backend::{Backend, BinaryOp, ReduceOp, UnaryOp, backend_for};
@@ -77,6 +77,7 @@ pub(crate) fn record_view(input: &Tensor, out: Tensor, kind: ViewKind) -> Tensor
                 let indices: Vec<i64> = (*start..start + len).map(|i| i as i64).collect();
                 let indices = Tensor::from_vec_i64(indices, Shape::from([*len]))?;
                 Tensor::zeros(in_shape.clone())
+                    .to_dtype(g.dtype())?
                     .to_device(g.device())?
                     .index_add(*dim, &indices, g)?
             }
@@ -188,10 +189,58 @@ impl Tensor {
         self.unary_op(UnaryOp::Sigmoid)
     }
 
-    /// A scalar constant on the same device as `like` (plumbing for VJPs
-    /// and scalar operator overloads).
+    /// A scalar constant with the dtype and device of `like` (plumbing for
+    /// VJPs and scalar operator overloads).
     pub fn scalar_on(like: &Tensor, value: f32) -> Result<Tensor> {
-        Tensor::scalar(value).to_device(like.device())
+        let s = match like.dtype() {
+            DType::F64 => Tensor::from_vec_f64(vec![f64::from(value)], Shape::from([]))?,
+            _ => Tensor::scalar(value),
+        };
+        s.to_device(like.device())
+    }
+
+    /// This tensor's elements converted to `dtype` (`F32` ↔ `F64`, or
+    /// `I64` → float). A no-op clone for the same dtype. CPU only for
+    /// `F64`; differentiable (the gradient converts back).
+    pub fn to_dtype(&self, dtype: DType) -> Result<Tensor> {
+        if self.dtype() == dtype {
+            return Ok(self.clone());
+        }
+        if self.device() != Device::Cpu {
+            return Err(Error::UnsupportedDType {
+                dtype,
+                op: "to_dtype (device tensors are f32; convert on the CPU)",
+            });
+        }
+        let shape = self.shape().clone();
+        let out = match (self.dtype(), dtype) {
+            (DType::F32, DType::F64) => Tensor::from_vec_f64(
+                self.to_vec_f32()?.into_iter().map(f64::from).collect(),
+                shape,
+            )?,
+            (DType::F64, DType::F32) => Tensor::from_vec_f32(
+                self.to_vec_f64()?.into_iter().map(|x| x as f32).collect(),
+                shape,
+            )?,
+            (DType::I64, DType::F32) => Tensor::from_vec_f32(
+                self.to_vec_i64()?.into_iter().map(|x| x as f32).collect(),
+                shape,
+            )?,
+            (DType::I64, DType::F64) => Tensor::from_vec_f64(
+                self.to_vec_i64()?.into_iter().map(|x| x as f64).collect(),
+                shape,
+            )?,
+            (_, to) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: to,
+                    op: "to_dtype",
+                });
+            }
+        };
+        let from = self.dtype();
+        Ok(record(out, vec![self.clone()], move |g| {
+            Ok(vec![Some(g.to_dtype(from)?)])
+        }))
     }
 
     // ---- binary ----------------------------------------------------------
@@ -514,7 +563,9 @@ impl Tensor {
         let in_shape = self.shape().clone();
         let idx = indices.clone();
         Ok(record(out, vec![self.clone()], move |g| {
-            let zeros = Tensor::zeros(in_shape.clone()).to_device(g.device())?;
+            let zeros = Tensor::zeros(in_shape.clone())
+                .to_dtype(g.dtype())?
+                .to_device(g.device())?;
             Ok(vec![Some(zeros.index_add(dim, &idx, g)?)])
         }))
     }
@@ -535,9 +586,16 @@ impl Tensor {
     // ---- device movement ------------------------------------------------------
 
     /// This tensor's data on `device` (a cheap clone when already there).
+    /// `F64` tensors are CPU-only: moving one to a GPU is a typed error.
     pub fn to_device(&self, device: Device) -> Result<Tensor> {
         if self.device() == device {
             return Ok(self.clone());
+        }
+        if self.dtype() == DType::F64 {
+            return Err(Error::UnsupportedDType {
+                dtype: DType::F64,
+                op: "to_device (f64 tensors live on the CPU; to_dtype(F32) first)",
+            });
         }
         let out = match (self.device(), device) {
             (Device::Cpu, target) => backend_for(target)?.upload(&self.contiguous_data()?)?,

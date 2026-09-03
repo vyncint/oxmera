@@ -47,6 +47,9 @@ impl Backend for CpuBackend {
     }
 
     fn unary(&self, op: UnaryOp, a: &Tensor) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::unary(op, a);
+        }
         let src = f32_input(a, "unary")?;
         let numel = a.numel();
         let mut out = vec![0.0f32; numel];
@@ -77,6 +80,16 @@ impl Backend for CpuBackend {
     }
 
     fn binary(&self, op: BinaryOp, a: &Tensor, b: &Tensor) -> Result<Tensor> {
+        if a.dtype() != b.dtype() {
+            return Err(Error::DTypeMismatch {
+                expected: a.dtype(),
+                got: b.dtype(),
+                op: "binary",
+            });
+        }
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::binary(op, a, b);
+        }
         let out_shape = broadcast_shapes(a.shape(), b.shape())?;
         let av = a.broadcast_view(&out_shape)?;
         let bv = b.broadcast_view(&out_shape)?;
@@ -127,10 +140,23 @@ impl Backend for CpuBackend {
     }
 
     fn matmul(&self, a: &Tensor, b: &Tensor) -> Result<Tensor> {
+        if a.dtype() != b.dtype() {
+            return Err(Error::DTypeMismatch {
+                expected: a.dtype(),
+                got: b.dtype(),
+                op: "matmul",
+            });
+        }
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::matmul(a, b);
+        }
         cpu_matmul::matmul(a, b)
     }
 
     fn reduce(&self, op: ReduceOp, a: &Tensor, axes: &[usize], keepdim: bool) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::reduce(op, a, axes, keepdim);
+        }
         let src = f32_input(a, "reduce")?;
         let dims = a.dims().to_vec();
 
@@ -255,6 +281,9 @@ impl Backend for CpuBackend {
     }
 
     fn argmax(&self, a: &Tensor, dim: usize, keepdim: bool) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::argmax(a, dim, keepdim);
+        }
         let src = f32_input(a, "argmax")?;
         let dims = a.dims().to_vec();
         let strides = a.layout().strides.values().to_vec();
@@ -310,6 +339,9 @@ impl Backend for CpuBackend {
     }
 
     fn index_select(&self, a: &Tensor, dim: usize, indices: &Tensor) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::index_select(a, dim, indices);
+        }
         let src = f32_input(a, "index_select")?;
         let idx = indices.to_vec_i64()?;
         let dims = a.dims().to_vec();
@@ -366,6 +398,9 @@ impl Backend for CpuBackend {
     }
 
     fn index_add(&self, a: &Tensor, dim: usize, indices: &Tensor, srct: &Tensor) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::index_add(a, dim, indices, srct);
+        }
         let idx = indices.to_vec_i64()?;
         let dims = a.dims().to_vec();
         if dim >= dims.len() {
@@ -406,6 +441,9 @@ impl Backend for CpuBackend {
     }
 
     fn cholesky(&self, a: &Tensor) -> Result<Tensor> {
+        if a.dtype() == DType::F64 {
+            return crate::cpu_f64::cholesky(a);
+        }
         f32_input(a, "cholesky")?;
         let d = a.dims();
         let n = d[d.len() - 1];
@@ -416,14 +454,24 @@ impl Backend for CpuBackend {
     }
 
     fn eigh(&self, a: &Tensor) -> Result<(Tensor, Tensor)> {
-        f32_input(a, "eigh")?;
         let d = a.dims();
         let n = d[d.len() - 1];
         let batch: usize = d[..d.len() - 2].iter().product();
-        let data = a.to_vec_f32()?;
-        let (w, v) = crate::cpu_linalg::eigh(&data, batch, n);
         let mut wshape = d[..d.len() - 1].to_vec();
         wshape[d.len() - 2] = n;
+        // The Jacobi routine works in f64 internally; an f64 input keeps
+        // its result in f64.
+        if a.dtype() == DType::F64 {
+            let data: Vec<f32> = a.to_vec_f64()?.iter().map(|&x| x as f32).collect();
+            let (w, v) = crate::cpu_linalg::eigh(&data, batch, n);
+            return Ok((
+                Tensor::from_vec_f64(w.iter().map(|&x| x as f64).collect(), Shape::new(wshape))?,
+                Tensor::from_vec_f64(v.iter().map(|&x| x as f64).collect(), a.shape().clone())?,
+            ));
+        }
+        f32_input(a, "eigh")?;
+        let data = a.to_vec_f32()?;
+        let (w, v) = crate::cpu_linalg::eigh(&data, batch, n);
         Ok((
             Tensor::from_vec_f32(w, Shape::new(wshape))?,
             Tensor::from_vec_f32(v, a.shape().clone())?,

@@ -72,6 +72,26 @@ impl Tensor {
         Self::from_vec_f32(data.to_vec(), shape)
     }
 
+    /// A contiguous CPU `F64` tensor holding `data`. `f64` tensors live on
+    /// the CPU (the GPU backends carry `f32`); every op the CPU backend
+    /// implements accepts them, and [`Tensor::to_dtype`] converts.
+    pub fn from_vec_f64(data: Vec<f64>, shape: impl Into<Shape>) -> Result<Self> {
+        let shape = shape.into();
+        let numel = checked_numel(&shape, "Tensor::from_vec_f64")?;
+        if data.len() != numel {
+            return Err(Error::ShapeMismatch {
+                expected: Shape::from([data.len()]),
+                got: shape,
+                op: "Tensor::from_vec_f64",
+            });
+        }
+        Ok(Self {
+            storage: Arc::new(Storage::from_f64_vec(data)),
+            layout: Layout::contiguous(shape),
+            autograd: None,
+        })
+    }
+
     /// A contiguous CPU `I64` tensor holding `data` (indices, targets).
     pub fn from_vec_i64(data: Vec<i64>, shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
@@ -185,6 +205,12 @@ impl Tensor {
         Ok(self.storage.cpu()?.f32s()?[offset])
     }
 
+    /// The element at a logical index, as `f64` (from an `F64` tensor).
+    pub fn get_f64(&self, index: &[usize]) -> Result<f64> {
+        let offset = self.layout.offset_of(index)?;
+        Ok(self.storage.cpu()?.f64s()?[offset])
+    }
+
     /// The element at a logical index, as `i64`.
     pub fn get_i64(&self, index: &[usize]) -> Result<i64> {
         let offset = self.layout.offset_of(index)?;
@@ -195,6 +221,13 @@ impl Tensor {
     /// storage.
     pub fn to_vec_f32(&self) -> Result<Vec<f32>> {
         let src = self.storage.cpu()?.f32s()?;
+        Ok(gather_logical(src, &self.layout))
+    }
+
+    /// Every element in logical (row-major) order, as `f64`, from an `F64`
+    /// CPU tensor (use [`Tensor::to_dtype`] first for an `f32` one).
+    pub fn to_vec_f64(&self) -> Result<Vec<f64>> {
+        let src = self.storage.cpu()?.f64s()?;
         Ok(gather_logical(src, &self.layout))
     }
 
@@ -397,6 +430,7 @@ impl Tensor {
                 let shape = self.shape().clone();
                 match self.storage.cpu()? {
                     CpuStorage::F32(_) => Tensor::from_vec_f32(self.to_vec_f32()?, shape),
+                    CpuStorage::F64(_) => Tensor::from_vec_f64(self.to_vec_f64()?, shape),
                     CpuStorage::I64(_) => Tensor::from_vec_i64(self.to_vec_i64()?, shape),
                     CpuStorage::U8(_) => Err(Error::UnsupportedDType {
                         dtype: DType::U8,
@@ -509,7 +543,9 @@ impl Tensor {
         // device-resident graph failed at the first VJP with a
         // DeviceMismatch (found by the CUDA backend's end-to-end test, and
         // latent on Metal).
-        let seed = Tensor::ones(self.shape().clone()).to_device(self.device())?;
+        let seed = Tensor::ones(self.shape().clone())
+            .to_dtype(self.dtype())?
+            .to_device(self.device())?;
         self.backward_with(seed)
     }
 

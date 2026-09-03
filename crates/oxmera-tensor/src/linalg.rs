@@ -10,7 +10,7 @@
 //! (covariance blocks, determinantal kernels), where the round-trip is
 //! cheap and exactness matters more than throughput.
 
-use oxmera_core::{Device, Error, Result, Shape};
+use oxmera_core::{DType, Device, Error, Result, Shape};
 
 use crate::autograd::GradFn;
 use crate::autograd::is_recording;
@@ -63,11 +63,18 @@ impl Tensor {
         Tensor::eye(n).to_device(device)
     }
 
+    /// The identity with the dtype and device of `like` (VJP plumbing).
+    fn eye_like(n: usize, like: &Tensor) -> Result<Tensor> {
+        Tensor::eye(n)
+            .to_dtype(like.dtype())?
+            .to_device(like.device())
+    }
+
     /// The diagonal of every matrix in a `[.., n, n]` tensor, as `[.., n]`.
     /// Differentiable.
     pub fn diag(&self) -> Result<Tensor> {
         let (_, n) = square_matrix_dims(self, "diag")?;
-        let eye = Tensor::eye_on(n, self.device())?;
+        let eye = Tensor::eye_like(n, self)?;
         self.mul(&eye)?.sum(&[self.ndim() - 1])
     }
 
@@ -81,7 +88,7 @@ impl Tensor {
                 detail: "needs rank >= 1".into(),
             });
         };
-        let eye = Tensor::eye_on(n, self.device())?;
+        let eye = Tensor::eye_like(n, self)?;
         self.unsqueeze(self.ndim())?.mul(&eye)
     }
 
@@ -112,10 +119,19 @@ impl Tensor {
             inputs: vec![self.clone()],
             vjp: Box::new(move |g: &Tensor| {
                 let (batch, n) = square_matrix_dims(&l, "cholesky backward")?;
-                let lv = l.to_device(Device::Cpu)?.to_vec_f32()?;
-                let gv = g.to_device(Device::Cpu)?.to_vec_f32()?;
+                let dtype = l.dtype();
+                let lv = l
+                    .to_device(Device::Cpu)?
+                    .to_dtype(DType::F32)?
+                    .to_vec_f32()?;
+                let gv = g
+                    .to_device(Device::Cpu)?
+                    .to_dtype(DType::F32)?
+                    .to_vec_f32()?;
                 let grad = crate::cpu_linalg::cholesky_backward(&lv, &gv, batch, n);
-                let grad = Tensor::from_vec_f32(grad, shape.clone())?.to_device(device)?;
+                let grad = Tensor::from_vec_f32(grad, shape.clone())?
+                    .to_dtype(dtype)?
+                    .to_device(device)?;
                 Ok(vec![Some(grad)])
             }),
         }))
