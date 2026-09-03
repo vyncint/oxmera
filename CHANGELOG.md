@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-03
+
+The "what oxmega needs" milestone (#25–#30) plus the pins triage (#23):
+everything a downstream research pipeline asked for after running on
+0.2.0, each item measured or parity-tested before it was written down.
+
+### Added
+
+- **Native gather/scatter on Metal and CUDA** (#25): `index_select` and
+  `index_add` run on the device through `gather_dim`/`scatter_add_dim`
+  (one thread per output element scanning the index list — deterministic,
+  adds in index order like the CPU reference, no atomics). The fallback
+  path now moves *every* operand through the CPU round-trip; moving only
+  the target left `src` on the device and failed the `narrow` VJP with a
+  DeviceMismatch on CUDA (found by oxmega's k-DPP loss).
+- **Small batched linear algebra** (#26): `Tensor::eye`/`eye_on`, `diag`,
+  `diag_embed`, `trace`, `cholesky` (differentiable — Murray 2016's VJP,
+  computed on the host in `f64`), `logdet`, `det` (SPD, via Cholesky) and
+  `eigh` (symmetric, cyclic Jacobi, eigenvalues ascending, not
+  differentiable). `cholesky`/`eigh` are `Backend` primitives with a CPU
+  implementation and the same round-trip fallback as the index ops; a
+  non-PD matrix is a typed error naming the batch index and pivot.
+- **`f64` tensors on the CPU** (#27): `DType::F64` storage,
+  `from_vec_f64`/`to_vec_f64`/`get_f64`, `Tensor::to_dtype` (`F32` ↔
+  `F64`, `I64` → float; differentiable), and every CPU primitive in f64 —
+  unary, broadcasting binary, matmul, Neumaier-compensated reductions,
+  argmax, index ops, `cholesky`, `eigh`. Autograd follows the dtype. The
+  GPU backends stay `f32`: `to_device` of an f64 tensor is a typed error.
+- **Asynchronous Metal dispatch** (#28): ops are encoded into an open
+  command buffer and committed every 64 ops or at the first host read,
+  which waits on every outstanding buffer (ADR-0008). `register_default()`
+  is idempotent on Metal and CUDA — a stateful backend must not be
+  replaced mid-flight. A new eight-thread concurrency stress covers the
+  asynchronous path.
+- **Fused Adam/AdamW step** (#28): `Backend::adam_step` and an `adam_step`
+  kernel on both GPU backends — one launch per parameter, the composite
+  step kept as reference and fallback, parity-tested over several steps
+  with and without decoupled decay.
+- **Parameter groups** (#29): `ParamGroup { params, lr, weight_decay }`;
+  `Sgd`/`Adam`/`AdamW`/`RmsProp::with_groups(..)` and `groups_mut()` for
+  schedules. The plain constructors are the one-group case and produce
+  identical updates (asserted).
+- **Rank-4+ matmul broadcasting and `einsum`** (#30): every leading
+  dimension is a batch dimension with NumPy broadcasting; ranks above 3
+  are lowered onto the unchanged rank-3 backend contract from recorded
+  view ops, so no new VJP. `einsum(spec, &[a, b])` covers the common one-
+  and two-operand contractions (`ij,jk->ik`, `bij,bjk->bik`,
+  `rbhd,rdo->rbho`, `ij->ji`, `i,i->`, `i,j->ij`); diagonals and implicit
+  output are typed errors. Loop-checked and gradchecked.
+
+### Changed
+
+- **termlens 0.6.1 → 0.8.0** (#23). PTY suites and both 100-iteration
+  stresses unchanged.
+- **The pins watch compares cuda-oxide with what the pinned reconverge
+  verifies, not upstream HEAD** (#23). reconverge is a rustc driver built
+  on the nightly cuda-oxide needs; upstream HEAD moved to a newer nightly
+  than reconverge 0.4.0 is built on, so the old watch reported drift
+  nobody could act on. The cuda-oxide pin stays at `a766fc26`.
+- `kernels.ptx` regenerated with nvcc 13.2 (`compute_75`, eight entries).
+
+### Measured
+
+- **Metal, oxmega device-bench** (Apple M4 Pro, 100 epochs × 3 stacked
+  seeds, six fits, back-to-back with the published 0.2.0, three rounds):
+  total 19.4–20.1 s → 7.5–7.7 s with asynchronous dispatch alone (2.6×)
+  → 7.4–7.6 s with the fused optimizer step; CPU 6.0–6.4 s in every
+  configuration. Per fit: mlp-h16 BCE 1.50 → 0.33 s, linear-lag5 set-NLL
+  3.43 → 0.87 s, deepsets-H30 set-NLL 6.04 → 2.92 s. The GPU is within
+  1.2× of the CPU on a workload built to favour the CPU; it does not
+  overtake it.
+- **CUDA on an NVIDIA A10G** (sm_86, driver 595.71.05, CUDA 13.2, rustc
+  1.98.0): parity suite 11/11 incl. index ops with duplicate indices and
+  strided views, `narrow` backward on the device, and the fused Adam step;
+  full workspace tests green with CUDA registered at load time;
+  Compute Sanitizer memcheck 0 errors and racecheck 0 hazards over the
+  whole parity suite single-threaded (one parallel run reported 1
+  racecheck hazard that five reruns did not reproduce), synccheck 0
+  errors; `oxmera train --device cuda --epochs 3` reaches loss 0.6693 at
+  ~47k samples/s — the same trajectory as 0.2.0. No CUDA throughput
+  claim beyond that.
+
+### Fixed
+
+- Parity tests under `--test-threads` read zeros from Metal once dispatch
+  was asynchronous: two causes, both fixed — waiting on the newest
+  committed command buffer only (Metal finishes them out of order) and
+  re-registering a fresh backend from every test (uncommitted work left
+  behind in the replaced instance).
+
 ## [0.2.0] — 2026-09-02
 
 The NVIDIA CUDA release, plus the edge-case hardening milestone.

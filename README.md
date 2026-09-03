@@ -32,11 +32,12 @@ let logits = model.forward(&x)?;
 
 | area | what you get |
 |---|---|
-| tensors | `f32` strided views (`reshape`/`permute`/`narrow`/`broadcast_to` are zero-copy), NumPy broadcasting, batched matmul, operator overloading (`&a + &b`, `a * 2.0`) |
+| tensors | `f32` (and CPU `f64`) strided views (`reshape`/`permute`/`narrow`/`broadcast_to` are zero-copy), NumPy broadcasting, batched matmul, operator overloading (`&a + &b`, `a * 2.0`) |
 | devices | CPU (rayon-parallel, cache-tiled GEMM), Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory) and NVIDIA CUDA (the same kernels in CUDA C, shipped as PTX and driven through the driver API — no CUDA toolkit needed to build, `libcuda` found at runtime); `tensor.to_device(...)` moves data, autograd flows across the move |
 | autograd | tape-based reverse mode: `requires_grad`, `backward()`, gradient accumulation, `no_grad` RAII guard — every VJP validated by finite differences in CI |
 | nn | `Linear`, `Conv2d`, `Embedding`, `LayerNorm`, `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`, `BCEWithLogitsLoss`; Kaiming/Xavier initializers |
-| optim | `SGD` (momentum, weight decay), `Adam`, `AdamW`, `RMSprop` |
+| optim | `SGD` (momentum, weight decay), `Adam`, `AdamW`, `RMSprop` — all with per-group learning rate and weight decay (`ParamGroup`); one fused launch per parameter on Metal and CUDA |
+| linalg | `eye`/`diag`/`diag_embed`/`trace`, batched `cholesky` (differentiable), `logdet`/`det`, `eigh`; rank-4+ matmul broadcasting and a two-operand `einsum` |
 | weights | zero-config `safetensors` save/load by parameter name |
 | terminal | `oxmera doctor` (hardware, devices, capabilities) and `oxmera train --tui` (live loss/accuracy sparklines, progress gauges, throughput, unified-memory usage) — both golden-tested through a real PTY with a 100-iteration determinism stress |
 
@@ -84,11 +85,11 @@ cargo run --release -p oxmera --example train_mnist -- --device metal
   and `launchbound` on plain CI runners. The research toolchain never
   becomes a dependency of the stable workspace; `deny.toml` enforces that
   firewall.
-- **CUDA is correctness-first for now.** One stream, synchronous
-  downloads, no cuBLAS, `f32` only; timings are not claimed until they
-  are measured.
-- **`f32`-first.** Integer tensors exist for indices and targets; wider
-  dtype coverage is roadmap.
+- **CUDA is correctness-first for now.** One stream, no cuBLAS, `f32`
+  only; timings are not claimed until they are measured.
+- **`f32`-first.** `f64` tensors live on the CPU (every op, autograd,
+  `to_dtype`); the GPU backends are `f32`. Integer tensors exist for
+  indices and targets.
 - **No performance claims without measurements.** See
   [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is and is not
   promised — including why tiny-batch Metal runs are slower than CPU.

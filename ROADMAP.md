@@ -11,18 +11,25 @@ Shipped in 0.2.0: the NVIDIA CUDA backend (`oxmera-cuda`, driver API via
 A10G), matmul batch broadcasting, contiguous fast paths that made CPU
 reductions 4–44× faster, and the edge-case hardening milestone (#17–#22).
 
+Shipped in 0.3.0 (the "what oxmega needs" milestone, #25–#30): native
+gather/scatter on Metal and CUDA, asynchronous Metal dispatch (2.6× on the
+motivating benchmark) and a fused Adam/AdamW step, small batched linear
+algebra (`cholesky`/`logdet`/`eigh`, differentiable Cholesky), rank-4+
+matmul broadcasting and `einsum`, per-group optimizer hyper-parameters,
+and `f64` tensors on the CPU.
+
 ## Next
 
-- [ ] Metal throughput: batched command encoders, buffer pooling, MPS
-      matmul option — with measured before/after numbers
-- [ ] Gather/scatter kernels on Metal (drop the CPU round-trip)
+- [ ] Metal throughput: buffer pooling, MPS matmul option — with measured
+      before/after numbers (async dispatch and the fused optimizer step
+      shipped in 0.3.0)
 - [ ] `f16`/`bf16` storage and compute on Metal
-- [ ] Rank-4+ matmul broadcasting and `einsum` (rank 2/3 batch
-      broadcasting shipped in 0.2.0)
-- [ ] CUDA throughput: cuBLAS option, stream overlap, buffer pooling,
-      `f16` — with measured before/after numbers
-- [ ] CUDA gather/scatter kernels (drop the CPU round-trip for
-      `index_select`/`index_add`/`argmax`)
+- [ ] `f64` on the GPU backends (CPU-only in 0.3.0)
+- [ ] CUDA throughput: cuBLAS option, multi-stream overlap, buffer pooling,
+      `f16` — with measured before/after numbers; measure the 0.3.0
+      kernels on the motivating benchmark first
+- [ ] `argmax` on the device (still a host round-trip)
+- [ ] General linear algebra: LU/solve, SVD, differentiable `eigh`
 - [ ] Data loading utilities and a dataset trait
 - [ ] Model zoo examples: CNN on MNIST/CIFAR, char-level transformer
 - [ ] TUI: multi-run comparison view, gradient-norm panel

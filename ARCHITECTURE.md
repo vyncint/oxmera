@@ -46,12 +46,18 @@ element count — and downcasts it back; that is how `oxmera-cuda` holds a
 - `Device` is a handle; the registry resolves it to an `Arc<dyn Backend>`.
 - Backends implement a small primitive set: `unary`/`binary` (strided,
   broadcasting), `matmul` (rank 2 or 3 with NumPy batch broadcasting, per
-  the shared `plan_matmul` contract), `reduce`,
-  `argmax`, `contiguous`, `upload`/`download`, and optional
-  `index_select`/`index_add` (with a CPU round-trip fallback).
+  the shared `plan_matmul` contract; ranks above 3 are lowered onto it in
+  the method layer), `reduce`, `argmax`, `contiguous`, `upload`/`download`,
+  and the optional `index_select`/`index_add`, `cholesky`/`eigh` and
+  `adam_step` — each with a documented fallback (a CPU round-trip of every
+  operand, or the composite optimizer step) when a backend declines.
 - Everything else — mean, softmax, losses, convolution (im2col),
-  normalization — is composed from primitives device-generically, so the
-  autograd tape differentiates composites for free.
+  normalization, `einsum`, `eye`/`diag`/`trace`, `logdet` — is composed
+  from primitives device-generically, so the autograd tape differentiates
+  composites for free. `cholesky` carries its own VJP (Murray 2016).
+- `f32` is the compute dtype on every device; `f64` tensors exist on the
+  CPU (storage, every CPU primitive, autograd) and convert with
+  `to_dtype`. The GPU backends reject them with a typed error.
 - The tape lives on the tensor: ops record a `GradFn` (inputs + VJP
   closure) when recording is on and an input is tracked; `backward()`
   walks reverse topological order, accumulating into leaf gradients.
@@ -62,22 +68,30 @@ element count — and downcasts it back; that is how `oxmera-cuda` holds a
 MSL kernels compiled at runtime into pipelines: strided elementwise
 (broadcast via stride-0 dims), per-output-element axis reductions, a
 threadgroup-memory two-stage full reduction, and a 16×16 tiled GEMM.
-Buffers are `StorageModeShared` (unified memory); every dispatch is a
-synchronous command buffer in v0.1. Parity with the CPU backend is
-asserted at `1e-5` in tests that run on real hardware.
+Buffers are `StorageModeShared` (unified memory). Dispatch is
+asynchronous since 0.3.0: ops are encoded into an open command buffer (one
+encoder each, ordered with hazard tracking), committed every 64 ops or at
+the first host read, which waits on every outstanding buffer — Metal may
+finish command buffers out of commit order (ADR-0008). Gather/scatter and
+the fused Adam step are kernels too, so nothing but `argmax` and the
+linear-algebra factorizations round-trips through the host. Parity with
+the CPU backend is asserted at `1e-5` in tests that run on real hardware,
+and a concurrency stress hammers the asynchronous path from eight
+threads.
 
 ## The CUDA backend
 
-The same five kernels as Metal, written once in CUDA C (`kernels.cu`) with
+The same eight kernels as Metal, written once in CUDA C (`kernels.cu`) with
 the identical `TensorMeta` ABI and opcodes, compiled by `nvcc` to PTX for
 the `compute_75` virtual architecture and embedded in the crate; the CUDA
 C source is embedded too, and a driver that rejects the shipped PTX ISA
 gets the kernels rebuilt for its compute capability through NVRTC. The
 driver library is `dlopen`ed by `cudarc` — nothing links against CUDA, so
 the crate builds and its tests pass on machines with no toolkit and no
-GPU, where it registers no device. One context, one stream, synchronous
-downloads; parity with the CPU backend is asserted at `1e-5` on real
-hardware, and the parity binary runs clean under Compute Sanitizer.
+GPU, where it registers no device. One context, one stream (launches
+queue asynchronously; only `download` synchronizes); parity with the CPU
+backend is asserted at `1e-5` on real hardware, and the parity binary runs
+clean under Compute Sanitizer.
 
 ## The dependency firewall (unchanged)
 
