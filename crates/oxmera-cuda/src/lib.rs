@@ -1,4 +1,4 @@
-//! The NVIDIA CUDA backend: the same five kernels as the Metal backend
+//! The NVIDIA CUDA backend: the same eight kernels as the Metal backend
 //! (strided elementwise, axis and full reductions, tiled matmul), written
 //! in CUDA C, shipped as PTX for `compute_75`, and driven through the CUDA
 //! driver API via `cudarc`.
