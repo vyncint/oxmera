@@ -64,13 +64,25 @@ jobs:
         run: |
           set -euo pipefail
           tree=$(cargo tree -p oxmera --no-default-features -e normal --prefix none)
-          for crate in cudarc libloading ctor oxmera-cuda; do
+          # Only the crates that are CUDA-only on EVERY platform. `ctor` is
+          # not one of them: oxmera-metal registers at load time the same
+          # way, so on macOS it stays in the graph and should — the first
+          # version of this step listed it and failed the macOS leg while
+          # the code was correct.
+          for crate in cudarc libloading oxmera-cuda; do
             if echo "$tree" | grep -qE "^${crate} "; then
               echo "::error::${crate} is still in the graph with --no-default-features"
               exit 1
             fi
           done
-          echo "cudarc, libloading, ctor and oxmera-cuda are all absent"
+          echo "cudarc, libloading and oxmera-cuda are all absent"
+
+          # `ctor` on macOS belongs to Metal; anywhere else it could only
+          # have come from CUDA, so check it where the answer is unambiguous.
+          if [ "$RUNNER_OS" != "macOS" ] && echo "$tree" | grep -qE "^ctor "; then
+            echo "::error::ctor is still in the graph, and off macOS only CUDA pulls it"
+            exit 1
+          fi
 
   msrv:
     name: msrv (1.88, lockfile)

@@ -67,10 +67,16 @@ fn a_signal_gives_the_terminal_back_and_still_kills_the_process() -> termlens::R
         );
         let (_, _, visible) = after.cursor();
         assert!(visible, "{name}: left the cursor hidden");
-        assert_eq!(
-            status.signal(),
-            Some(name),
-            "{name}: must still report as killed by the signal, got {status:?}"
+        // `contains`, not `==`: macOS spells this "Terminated: 15" and
+        // Linux "Terminated". Asserting the exact string passed on Linux
+        // and failed the macOS leg while the behaviour under test was
+        // identical on both.
+        let reported = status
+            .signal()
+            .unwrap_or_else(|| panic!("{name}: exited normally instead of dying, {status:?}"));
+        assert!(
+            reported.contains(name),
+            "{name}: must still report as killed by the signal, got {reported:?}"
         );
     }
     Ok(())
