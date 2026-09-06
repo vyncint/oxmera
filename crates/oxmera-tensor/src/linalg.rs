@@ -155,14 +155,93 @@ impl Tensor {
 
     /// Eigen-decomposition of every symmetric matrix in a `[.., n, n]`
     /// tensor: eigenvalues ascending as `[.., n]` and orthonormal
-    /// eigenvectors as the columns of `[.., n, n]` (`A V = V Λ`). The
-    /// full matrix is read and symmetrized. Not differentiable.
+    /// eigenvectors as the columns of `[.., n, n]` (`A V = V Λ`). Not
+    /// differentiable.
+    ///
+    /// The input must be symmetric to within [`EIGH_SYMMETRY_TOL`]
+    /// (relative); anything further is a typed [`Error::InvalidArgument`]
+    /// naming the batch index and the worst offending pair.
+    ///
+    /// Before 0.4.0 the full matrix was read and silently symmetrized, so
+    /// a non-symmetric input returned the eigenpairs of `(A + Aᵀ)/2` — a
+    /// different matrix — with no error: `[[1, 2], [5, 1]]` answered
+    /// `[-2.5, 4.5]` where the true eigenvalues are `1 ± √10`, and the
+    /// returned pair did not satisfy `A v = λ v` for the `A` that was
+    /// passed. The tolerance keeps the case the check exists to permit —
+    /// a covariance or Gram matrix assembled as `XᵀX / n` in `f32`, which
+    /// is symmetric in intent and asymmetric in the last few bits — while
+    /// refusing a transpose that was actually missed.
     pub fn eigh(&self) -> Result<(Tensor, Tensor)> {
         square_matrix_dims(self, "eigh")?;
+        check_symmetric(self, "eigh")?;
         dispatch_cpu_fallback(
             self,
             |be, t| be.eigh(t),
             |be, (w, v)| Ok((be.upload(&w)?, be.upload(&v)?)),
         )
     }
+}
+
+/// How far from symmetric an [`Tensor::eigh`] input may be, relative to
+/// its own largest magnitude.
+///
+/// `1e-5` is the bound the CPU↔GPU parity suite already uses for
+/// elementwise disagreement, so it is the project's existing answer to
+/// "how much floating-point drift is not a bug". A matrix that has
+/// accumulated more asymmetry than the backends disagree by has a real
+/// problem, not a rounding one.
+pub const EIGH_SYMMETRY_TOL: f32 = 1e-5;
+
+/// Refuse a matrix that is not symmetric to within [`EIGH_SYMMETRY_TOL`].
+///
+/// Reported like every other precondition in this module: the batch index
+/// so that a `[.., n, n]` input names *which* matrix is wrong rather than
+/// the first one, and the worst pair so the caller can see how far off it
+/// is rather than only that it is off.
+fn check_symmetric(t: &Tensor, op: &'static str) -> Result<()> {
+    let (batch, n) = square_matrix_dims(t, op)?;
+    if n < 2 {
+        // A 0x0 or 1x1 matrix is symmetric by construction, and the loop
+        // below would read nothing. Say so rather than relying on it.
+        return Ok(());
+    }
+    // Host-side and in f32: this reads the values once to compare them,
+    // and a GPU tensor has to come down for the Jacobi sweep anyway.
+    let a = t
+        .to_device(Device::Cpu)?
+        .to_dtype(DType::F32)?
+        .to_vec_f32()?;
+    let rank = t.dims().len();
+    for b in 0..batch {
+        let m = &a[b * n * n..(b + 1) * n * n];
+        let scale = m.iter().fold(0.0f32, |acc, v| acc.max(v.abs()));
+        let mut worst = (0usize, 0usize, 0.0f32);
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let d = (m[i * n + j] - m[j * n + i]).abs();
+                if d > worst.2 {
+                    worst = (i, j, d);
+                }
+            }
+        }
+        // Relative to the matrix's own magnitude. An absolute bound would
+        // refuse a well-formed matrix scaled up and accept a badly-formed
+        // one scaled down.
+        let bound = EIGH_SYMMETRY_TOL * scale.max(f32::MIN_POSITIVE);
+        if worst.2 > bound {
+            let (i, j, d) = worst;
+            return Err(Error::InvalidArgument {
+                op,
+                detail: format!(
+                    "matrix {b} is not symmetric (|a[{i}][{j}] - a[{j}][{i}]| = {d:e}, \
+                     tolerance {bound:e}); {op} needs a symmetric input — if that is \
+                     what you meant, symmetrize it explicitly with \
+                     a.add(&a.transpose({d0}, {d1})?)?.mul_scalar(0.5)?",
+                    d0 = rank - 2,
+                    d1 = rank - 1,
+                ),
+            });
+        }
+    }
+    Ok(())
 }

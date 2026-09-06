@@ -1,6 +1,6 @@
 [package]
 name = "oxmera-tensor"
-description = "The oxmera tensor: strided zero-copy views, broadcasting, multi-device storage (CPU + Apple Metal), the backend registry, and tape-based reverse-mode autograd."
+description = "The oxmera tensor: strided zero-copy views, broadcasting, multi-device storage (CPU, Apple Metal, NVIDIA CUDA), einsum, batched linear algebra, the backend registry, and tape-based reverse-mode autograd."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -56,6 +56,7 @@ impl Conv2d {
 
 impl Module for Conv2d {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
+        crate::check_param_dtype("Conv2d", input, &self.parameters())?;
         let dims = input.dims();
         if dims.len() != 4 || dims[1] != self.in_channels {
             return Err(Error::ShapeMismatch {

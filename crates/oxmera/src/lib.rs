@@ -22,6 +22,7 @@
 pub use oxmera_autograd as autograd;
 pub use oxmera_core as core;
 pub use oxmera_cpu as cpu;
+#[cfg(feature = "cuda")]
 pub use oxmera_cuda as cuda;
 #[cfg(target_os = "macos")]
 pub use oxmera_metal as metal;

@@ -23,5 +23,12 @@ ratatui = "0.30.0"
 serde.workspace = true
 toml.workspace = true
 
+# Already in the tree via crossterm <- ratatui, at this version. Naming it
+# here is an import, not a new dependency: no new third-party code and no
+# new licence. Unix only — Windows has no POSIX signals (see src/restore.rs).
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+
+
 [dev-dependencies]
-termlens = "0.8.0"
+termlens = "0.9"

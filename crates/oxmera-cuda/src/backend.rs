@@ -25,6 +25,36 @@ use oxmera_tensor::tensor::Tensor;
 const KERNELS_CU: &str = include_str!("../kernels.cu");
 /// PTX for `compute_75`, produced by `nvcc -arch=compute_75 -O3 -ptx`.
 const KERNELS_PTX: &str = include_str!("../kernels.ptx");
+/// The fingerprint of the `kernels.cu` that produced `kernels.ptx`,
+/// written by `just ptx` at the same moment as the PTX itself.
+///
+/// Read only by the guard test — it is the *committed* value the running
+/// source is checked against, so having no non-test reader is the point.
+#[cfg(test)]
+const KERNELS_PTX_SOURCE: &str = include_str!("../kernels.ptx.source");
+
+/// FNV-1a over the CUDA source, as sixteen lowercase hex digits.
+///
+/// **This detects an accident, not an adversary**, and that is the whole
+/// threat model: a maintainer edits `kernels.cu`, forgets to regenerate
+/// the PTX, and ships a crate whose two copies of the kernels disagree.
+/// FNV-1a is deterministic, fixed by its published constants, and needs no
+/// dependency — which matters in a crate whose supply chain is otherwise
+/// `cudarc` and nothing else. If this ever has to resist tampering it is
+/// the wrong function and should be replaced with a real digest.
+///
+/// It also only checks one direction. A hand-edited `kernels.ptx` still
+/// passes, because the fingerprint is of the source. Nobody hand-edits
+/// generated PTX; if that changes, this guard does not cover it.
+#[must_use]
+pub fn source_fingerprint(source: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in source.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
 const KERNEL_NAMES: &[&str] = &[
     "unary_strided",
     "binary_strided",
@@ -787,10 +817,51 @@ mod tests {
         for name in KERNEL_NAMES {
             assert!(
                 KERNELS_PTX.contains(&format!(".visible .entry {name}(")),
-                "{name} missing from kernels.ptx — regenerate it from kernels.cu"
+                "{name} missing from kernels.ptx — regenerate it with `just ptx`"
             );
             assert!(KERNELS_CU.contains(&format!("__global__ void {name}(")));
         }
         assert!(KERNELS_PTX.contains(".target sm_75"));
+    }
+
+    /// FNV-1a's published test vectors. The first version of the function
+    /// above wrote the prime as `0x1000_0000_01b3` — twelve hex digits
+    /// where 1099511628211 has eleven — which is a hash, just not FNV-1a,
+    /// and it would have been a fingerprint nobody could reproduce with a
+    /// standard tool. A guard whose own constants are unchecked is not a
+    /// guard.
+    #[test]
+    fn the_fingerprint_is_really_fnv_1a() {
+        assert_eq!(
+            source_fingerprint(""),
+            "cbf29ce484222325",
+            "the offset basis"
+        );
+        assert_eq!(source_fingerprint("a"), "af63dc4c8601ec8c");
+        assert_eq!(source_fingerprint("foobar"), "85944171f73967e8");
+    }
+
+    /// The guard above checks kernel **names**. This one checks that the
+    /// PTX was built from the source sitting beside it.
+    ///
+    /// Without it, changing a kernel's arithmetic without regenerating the
+    /// PTX passed every test that runs without a GPU — measured, with
+    /// `relu` altered from `fmaxf(x, 0.0f)` to `fmaxf(x, 1.0f)`: three
+    /// suites green, and the eleven tests that compare against the CPU
+    /// `#[ignore]`d for want of hardware. Two copies of the kernels ship
+    /// in this crate and `load_module` chooses between them by driver age,
+    /// so a mismatch means two users on the same published version run
+    /// different code.
+    #[test]
+    fn the_shipped_ptx_was_built_from_the_shipped_source() {
+        let actual = source_fingerprint(KERNELS_CU);
+        assert_eq!(
+            KERNELS_PTX_SOURCE.trim(),
+            actual,
+            "kernels.cu has changed since kernels.ptx was generated.\n\
+             The GPU would run the old kernels while the source shows the new ones,\n\
+             and a driver old enough to take the NVRTC path would run the new ones.\n\
+             Regenerate both on a machine with nvcc:  just ptx"
+        );
     }
 }

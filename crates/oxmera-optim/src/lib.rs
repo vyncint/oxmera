@@ -378,3 +378,10 @@ impl Optimizer for RmsProp {
         zero_all(&self.groups);
     }
 }
+
+/// What this crate can do, for `oxmera doctor`. See
+/// [`oxmera_tensor::CAPABILITIES`] for why the list lives beside the code.
+pub const CAPABILITIES: &[(&str, &str)] = &[(
+    "optim",
+    "SGD Adam AdamW RMSprop, per-group lr/decay, fused GPU step",
+)];

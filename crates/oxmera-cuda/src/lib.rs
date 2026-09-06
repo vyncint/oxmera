@@ -25,7 +25,9 @@
 
 mod backend;
 
-pub use backend::{CudaBackend, device_summary, is_driver_present, register_default};
+pub use backend::{
+    CudaBackend, device_summary, is_driver_present, register_default, source_fingerprint,
+};
 
 // SAFETY: runs before main via the platform's initializer section. The body
 // probes for libcuda (a dlopen that fails cleanly when the library is

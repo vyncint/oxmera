@@ -52,6 +52,7 @@ impl Linear {
 
 impl Module for Linear {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
+        crate::check_param_dtype("Linear", input, &self.parameters())?;
         let w = self.weight.value().to_device(input.device())?;
         let mut y = input.matmul(&w.t()?)?;
         if let Some(bias) = &self.bias {

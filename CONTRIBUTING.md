@@ -48,9 +48,17 @@ behaviour change riding along:
 | component | current pin |
 |---|---|
 | nightly | `nightly-2026-04-03` |
-| reconverge | 0.4.0 |
+| reconverge | 0.5.0 |
 | cuda-oxide | rev `a766fc26` |
-| launchbound | 2.0.0 / action `@v2` (SHA-pinned) |
+| launchbound | 2.1.0 / action `@v2` (SHA-pinned) |
+
+**Regenerating the CUDA PTX is `just ptx`**, and it is the only recipe that
+needs `nvcc` on PATH. It writes `crates/oxmera-cuda/kernels.ptx` and
+`kernels.ptx.source` **together** — commit both. Editing `kernels.cu` and
+running anything less fails
+`the_shipped_ptx_was_built_from_the_shipped_source`, which exists because
+the crate ships the kernels twice and the driver picks between them at run
+time.
 
 A bump must touch, together: `research/rust-toolchain.toml` (nightly), the
 `cuda-oxide` rev in the research workspace manifests, the
@@ -70,7 +78,7 @@ that and reports upstream HEAD for information only; when HEAD needs a
 newer nightly than reconverge is built on, the pin waits for a reconverge
 release, not the other way round.
 
-`termlens` (currently 0.8.0) pairs with nothing and moves alone, in its own
+`termlens` (currently 0.9.0) pairs with nothing and moves alone, in its own
 commit, gated by the PTY suites and both 100-iteration stresses.
 
 ## Testing policy

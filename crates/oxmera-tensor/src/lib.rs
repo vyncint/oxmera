@@ -35,6 +35,7 @@ mod cpu_linalg;
 mod cpu_matmul;
 mod einsum;
 mod linalg;
+pub use linalg::EIGH_SYMMETRY_TOL;
 pub mod ops;
 pub mod overload;
 pub mod storage;
@@ -45,3 +46,39 @@ pub use backend::{Backend, BinaryOp, ReduceOp, UnaryOp, backend_for, register_ba
 pub use einsum::einsum;
 pub use storage::{CpuStorage, OpaqueBuffer, Storage, StorageData};
 pub use tensor::Tensor;
+
+/// What this crate can do, for `oxmera doctor`.
+///
+/// It lives here, beside the code, because the alternative was a list of
+/// string literals in `oxmera-cli` that nobody editing an op ever opened:
+/// that list named neither CUDA nor `f64` nor the linear algebra two
+/// releases after they shipped, and three golden files pinned it, so
+/// adding a feature to it cost more than leaving it stale.
+///
+/// Adding an op family here is one line in the crate that implements it.
+pub const CAPABILITIES: &[(&str, &str)] = &[
+    // Each row must fit an 80-column terminal after the 12-character
+    // "  area     " prefix, so keep the text under 68 characters: the
+    // doctor goldens are 100 wide and a wrapped row costs two of them.
+    // `capability_rows_fit_a_narrow_terminal` in oxmera-cli enforces it.
+    (
+        "tensor",
+        "strided views, broadcasting, batched matmul, device transfer",
+    ),
+    (
+        "dtypes",
+        "f32 everywhere; f64 on the CPU; i64 indices; no promotion",
+    ),
+    (
+        "linalg",
+        "eye diag trace, batched cholesky (differentiable) logdet det eigh",
+    ),
+    (
+        "einsum",
+        "one- and two-operand contractions with an explicit output",
+    ),
+    (
+        "indexing",
+        "index_select / index_add, native on Metal and CUDA",
+    ),
+];

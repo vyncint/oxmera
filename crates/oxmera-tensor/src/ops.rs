@@ -512,14 +512,50 @@ impl Tensor {
 
     /// Mean over `axes` (empty means all) — composite, so its gradient
     /// flows through `sum` and scalar multiply.
+    ///
+    /// Reducing over a zero-length extent is a typed error; see
+    /// [`Tensor::mean_keepdim`].
     pub fn mean(&self, axes: &[usize]) -> Result<Tensor> {
         self.mean_keepdim(axes, false)
     }
 
     /// Mean over `axes` with explicit `keepdim`.
+    ///
+    /// # Errors
+    ///
+    /// Reducing over a zero-length extent is an
+    /// [`Error::InvalidArgument`]: the mean of nothing is `0/0`, and there
+    /// is no value that is the right answer.
+    ///
+    /// Until 0.4.0 this returned `NaN`, which is not an answer either but
+    /// looks like one. A `NaN` from an empty last batch does not fail — it
+    /// flows into the loss, then into every gradient, and surfaces an
+    /// epoch later as a model that stopped learning for no visible reason.
+    /// `argmax` already refused the same input for the same reason; this
+    /// is the pair being made consistent.
+    ///
+    /// `sum` and `max` still return their identities (`0` and `-inf`) over
+    /// an empty extent, and deliberately: those compose correctly under
+    /// further reduction, and `mean` does not. The whole family is
+    /// tabulated in `docs/LIMITATIONS.md`.
     pub fn mean_keepdim(&self, axes: &[usize], keepdim: bool) -> Result<Tensor> {
         let axes_n = normalize_axes(axes, self.ndim(), "mean")?;
         let n: usize = axes_n.iter().map(|&ax| self.dims()[ax]).product();
+        if n == 0 {
+            let empty: Vec<usize> = axes_n
+                .iter()
+                .copied()
+                .filter(|&ax| self.dims()[ax] == 0)
+                .collect();
+            return Err(Error::InvalidArgument {
+                op: "mean",
+                detail: format!(
+                    "dimension(s) {empty:?} have extent 0, so the mean would be 0/0; \
+                     the mean of nothing is undefined — use sum() if an empty \
+                     reduction should be 0, or guard the empty case at the call site"
+                ),
+            });
+        }
         self.sum_keepdim(&axes_n, keepdim)?
             .mul_scalar(1.0 / n as f32)
     }

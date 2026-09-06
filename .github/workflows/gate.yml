@@ -32,8 +32,8 @@ jobs:
         run: rustup toolchain install nightly-2026-04-03 --profile minimal --component rustfmt,clippy,rust-src,rustc-dev,llvm-tools
       - name: Install pinned reconverge (both binaries, same version)
         run: |
-          cargo +nightly-2026-04-03 install --locked cargo-reconverge --version 0.4.0
-          cargo +nightly-2026-04-03 install --locked reconverge-driver --version 0.4.0
+          cargo +nightly-2026-04-03 install --locked cargo-reconverge --version 0.5.0
+          cargo +nightly-2026-04-03 install --locked reconverge-driver --version 0.5.0
       - name: Strict convergence check, per-part context for both targets
         working-directory: research/oxmera-cuda-oxide
         env:
@@ -53,12 +53,12 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Safety gate over the kernel launch space
         id: gate
-        uses: vyncint/launchbound/action@bac7be26d6b371ccd46f15232e26990be7dbce03 # v2.0.0
+        uses: vyncint/launchbound/action@5381fc1c804ea54fab4aef6c1aac3d336cdebe47 # v2.1.0
         with:
           kernel: research/oxmera-cuda-oxide
           cc: ${{ matrix.cc }}
           fail-on: refused
-          reconverge-version: "0.4.0"
+          reconverge-version: "0.5.0"
           toolchain: nightly-2026-04-03
       - name: Assert the whole space is admitted
         env:

@@ -91,3 +91,10 @@ fn central_difference(
     };
     Ok((eval(eps)? - eval(-eps)?) / (2.0 * eps))
 }
+
+/// What this crate can do, for `oxmera doctor`. See
+/// [`oxmera_tensor::CAPABILITIES`] for why the list lives beside the code.
+pub const CAPABILITIES: &[(&str, &str)] = &[(
+    "autograd",
+    "reverse-mode tape, finite-difference verified, no_grad guard",
+)];

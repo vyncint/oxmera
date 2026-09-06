@@ -19,7 +19,7 @@ members = [
 exclude = ["research"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.88"
 readme = "README.md"
@@ -34,14 +34,17 @@ toml = "0.9"
 
 # Internal crates. The version field is required so path dependencies
 # survive `cargo publish`.
-oxmera = { path = "crates/oxmera", version = "0.3.0" }
-oxmera-core = { path = "crates/oxmera-core", version = "0.3.0" }
-oxmera-tensor = { path = "crates/oxmera-tensor", version = "0.3.0" }
-oxmera-ops = { path = "crates/oxmera-ops", version = "0.3.0" }
-oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.3.0" }
-oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.3.0" }
-oxmera-metal = { path = "crates/oxmera-metal", version = "0.3.0" }
-oxmera-cuda = { path = "crates/oxmera-cuda", version = "0.3.0" }
-oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.3.0" }
-oxmera-nn = { path = "crates/oxmera-nn", version = "0.3.0" }
-oxmera-optim = { path = "crates/oxmera-optim", version = "0.3.0" }
+oxmera = { path = "crates/oxmera", version = "0.4.0" }
+oxmera-core = { path = "crates/oxmera-core", version = "0.4.0" }
+oxmera-tensor = { path = "crates/oxmera-tensor", version = "0.4.0" }
+oxmera-ops = { path = "crates/oxmera-ops", version = "0.4.0" }
+# default-features off at the workspace level so the facade can forward its
+# own `cuda` feature through rather than inheriting an unconditional one.
+# Every consumer opts in explicitly; there is exactly one (the facade).
+oxmera-runtime = { path = "crates/oxmera-runtime", version = "0.4.0", default-features = false }
+oxmera-cpu = { path = "crates/oxmera-cpu", version = "0.4.0" }
+oxmera-metal = { path = "crates/oxmera-metal", version = "0.4.0" }
+oxmera-cuda = { path = "crates/oxmera-cuda", version = "0.4.0" }
+oxmera-autograd = { path = "crates/oxmera-autograd", version = "0.4.0" }
+oxmera-nn = { path = "crates/oxmera-nn", version = "0.4.0" }
+oxmera-optim = { path = "crates/oxmera-optim", version = "0.4.0" }

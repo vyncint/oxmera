@@ -9,6 +9,7 @@
 mod doctor;
 mod probe;
 mod report;
+mod restore;
 mod train;
 mod tui;
 

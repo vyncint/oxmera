@@ -64,6 +64,10 @@ pub struct Dashboard {
 
 /// Enter the alternate screen and draw the initial (empty) dashboard.
 pub fn start(state: DashState) -> Result<Dashboard, String> {
+    // Before the terminal is borrowed, so the guard is in place for every
+    // instant it is borrowed. `ratatui::init()` installs the panic hook;
+    // this covers the exit it does not (#40).
+    crate::restore::on_signal();
     let mut terminal = ratatui::init();
     terminal
         .draw(|f| draw(f, &state))
@@ -100,14 +104,14 @@ impl Dashboard {
             .draw(|f| draw(f, &self.state))
             .map_err(|e| e.to_string())?;
         wait_for_quit(&mut self.terminal, &self.state)?;
-        ratatui::restore();
+        crate::restore::terminal();
         Ok(())
     }
 
     fn drain_quit(&mut self) -> Result<(), String> {
         while event::poll(std::time::Duration::ZERO).map_err(|e| e.to_string())? {
             if is_quit(&event::read().map_err(|e| e.to_string())?) {
-                ratatui::restore();
+                crate::restore::terminal();
                 std::process::exit(0);
             }
         }
@@ -125,6 +129,10 @@ pub fn run_replay(replay: &Replay) -> Result<(), String> {
         replay.batches_per_epoch,
         replay.memory.clone(),
     );
+    // The replay path borrows the terminal exactly as the live one does,
+    // so it needs the same guard. It is also the path the pty tests drive,
+    // which is why the signal tests can assert on it at all.
+    crate::restore::on_signal();
     let mut terminal = ratatui::init();
     for m in &replay.epochs {
         state.epoch += 1;
@@ -139,7 +147,7 @@ pub fn run_replay(replay: &Replay) -> Result<(), String> {
         .draw(|f| draw(f, &state))
         .map_err(|e| e.to_string())?;
     wait_for_quit(&mut terminal, &state)?;
-    ratatui::restore();
+    crate::restore::terminal();
     Ok(())
 }
 

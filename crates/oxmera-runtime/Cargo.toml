@@ -9,12 +9,27 @@ readme.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+# On by default, so nothing changes for anyone who does not ask.
+#
+# Off, the CUDA backend is not compiled, not linked, and does not register:
+# `cudarc`, `libloading` and the `ctor`/`dtor` pair leave the graph, the
+# 88 KB of PTX leaves the binary, and no constructor runs before `main`.
+# `Device::Cuda` stays a *typed runtime error* either way — never a compile
+# error — so code that names the device still builds.
+default = ["cuda"]
+cuda = ["dep:oxmera-cuda"]
+
 [dependencies]
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
 oxmera-ops.workspace = true
 oxmera-cpu.workspace = true
-oxmera-cuda.workspace = true
+oxmera-cuda = { workspace = true, optional = true }
 
+# Metal is gated by target rather than by feature: it cannot build off
+# macOS at all, so there is nothing for a user to decide. CUDA is gated by
+# feature because it builds everywhere and is *useful* almost nowhere by
+# comparison — including on macOS, where NVIDIA hardware cannot exist.
 [target.'cfg(target_os = "macos")'.dependencies]
 oxmera-metal.workspace = true

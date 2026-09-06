@@ -1,6 +1,6 @@
 [package]
 name = "oxmera"
-description = "A Rust-native tensor and deep-learning framework: multi-threaded CPU and Apple Metal backends, reverse-mode autograd, NN layers, optimizers, safetensors, and a PTY-tested terminal UI."
+description = "A Rust-native tensor and deep-learning framework: CPU, Apple Metal and NVIDIA CUDA backends, reverse-mode autograd, NN layers, optimizers, small batched linear algebra, safetensors, and a PTY-tested terminal UI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,11 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 authors.workspace = true
+
+[features]
+# Forwarded to oxmera-runtime, which owns the registration. On by default.
+default = ["cuda"]
+cuda = ["dep:oxmera-cuda", "oxmera-runtime/cuda"]
 
 [dependencies]
 oxmera-core.workspace = true
@@ -18,7 +23,7 @@ oxmera-cpu.workspace = true
 oxmera-autograd.workspace = true
 oxmera-nn.workspace = true
 oxmera-optim.workspace = true
-oxmera-cuda.workspace = true
+oxmera-cuda = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 oxmera-metal.workspace = true

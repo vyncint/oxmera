@@ -28,6 +28,24 @@ test:
 deny:
     cargo deny check
 
+# Regenerate the shipped CUDA PTX and its source fingerprint, together.
+#
+# Needs `nvcc` on PATH; this is the one recipe that does. `kernels.ptx` and
+# `kernels.ptx.source` MUST be written by the same command, because the
+# whole point of the fingerprint is that the two files were produced from
+# one source at one moment — see the test
+# `the_shipped_ptx_was_built_from_the_shipped_source`. Editing the kernels
+# and running anything less than this recipe is the failure it exists to
+# catch.
+#
+# compute_75 (Turing) is the floor: it is what `needs_cc` claims and what
+# every driver from the 12.8 series can load. A newer -arch would silently
+# drop older cards.
+ptx:
+    cd crates/oxmera-cuda && nvcc -arch=compute_75 -O3 -ptx kernels.cu -o kernels.ptx
+    cd crates/oxmera-cuda && cargo run --quiet --example fingerprint > kernels.ptx.source
+    @echo "regenerated kernels.ptx and kernels.ptx.source — commit both"
+
 # The nightly research workspace: format and check only — no execution,
 # no GPU, no CUDA toolkit required. rustup installs the pinned nightly
 # from research/rust-toolchain.toml on first use.

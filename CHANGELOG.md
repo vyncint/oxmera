@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-06
+
+The audit milestone (#33–#40): what the framework claimed, checked against
+what it did. Every item was found by exercising `main` as a downstream
+consumer — building the workspace, driving the CLI through a pty, and
+probing the public tensor surface op by op — and every one carries a
+reproduction that was run rather than inferred from reading the source.
+
+The design bar was that each fix leaves behind something that fails next
+time. A refreshed capability list decays again by 0.5.0; a test that fails
+when a release adds a capability and does not list it does not.
+
+### Fixed
+
+- **`eigh` silently symmetrized a non-symmetric input** (#33). It read the
+  full matrix, averaged the triangles, and returned the eigenpairs of
+  `(A + Aᵀ)/2` — a different matrix — with no error: `[[1, 2], [5, 1]]`
+  answered `[-2.5, 4.5]` where the true eigenvalues are `1 ± √10`, and the
+  returned pair did not satisfy `A v = λ v` for the `A` that was passed.
+  Now a typed error naming the batch index, the worst offending pair and
+  the cast to make, above a relative tolerance (`EIGH_SYMMETRY_TOL`,
+  `1e-5`, now public) chosen to keep passing the case the check exists to
+  permit: a covariance or Gram matrix assembled in `f32`, symmetric in
+  intent and asymmetric in the last few bits. Every other precondition in
+  the library was already a typed error; this was the one that was not.
+- **Nothing checked that `kernels.ptx` was built from `kernels.cu`** (#34).
+  The crate ships the kernels twice and `load_module` chooses between them
+  by driver age, so a mismatch means two users on the same published
+  version run different code — the newer driver takes the stale PTX, the
+  older one rebuilds the edited source through NVRTC. The only guard
+  compared kernel *names*: measured, changing `relu` from `fmaxf(x, 0.0f)`
+  to `fmaxf(x, 1.0f)` passed every suite that runs without a GPU, because
+  the eleven tests that would catch it are `#[ignore]`d without hardware.
+  Now `kernels.ptx.source` carries a fingerprint of the source, written by
+  the same `just ptx` recipe that writes the PTX, and asserted by a test
+  that needs no GPU. The same mutation now fails it, with the command to
+  fix it in the message.
+- **`train --tui` did not give the terminal back when signalled** (#40).
+  Measured through a pty: after `SIGTERM` the shell was left inside the
+  alternate screen with the cursor hidden, and nothing written to say so —
+  the way out is to type `reset` blind. `ratatui::init()` already installed
+  a panic hook, so this was the one remaining unguarded exit. `SIGINT`,
+  `SIGTERM` and `SIGHUP` now restore and **re-raise with the default
+  disposition**, so the process still reports as killed by that signal to
+  `$?`, to `timeout` and to a supervisor. `signal-hook` was already in the
+  tree through crossterm, so this is an import rather than a dependency.
+- **`oxmera doctor` reported a capability list frozen before 0.2.0** (#36).
+  Six string literals in the CLI, pinned by three golden frames, so adding
+  a feature to the list cost more than leaving it stale — and CUDA, `f64`,
+  the linear algebra, `einsum`, gather/scatter and per-group optimizer
+  hyper-parameters were all absent, three releases on. The rows now live in
+  the crates that implement them (`oxmera_tensor::CAPABILITIES` and
+  siblings), so adding an op family is one line in the crate that adds it.
+- **The crates.io descriptions for `oxmera` and `oxmera-tensor` still said
+  "CPU and Apple Metal"** (#37), two releases after the CUDA backend
+  shipped. That line is what appears in search results and `cargo search`.
+
+### Changed
+
+- **`mean` over a zero-length extent is a typed error** (#38), where it
+  returned `NaN`. Four reductions over an empty extent behaved four ways;
+  `sum` and `max` keep their identities because those compose correctly
+  under further reduction, and `NaN` does not — it flows into the loss,
+  then into every gradient, and surfaces an epoch later as a model that
+  stopped learning for no visible reason. `argmax` already refused the same
+  input for the same reason. Reducing a *non-empty* axis of a tensor that
+  merely has an empty one is unaffected. The whole family is tabulated in
+  `docs/LIMITATIONS.md`.
+- **Passing a mismatched dtype to an `nn` layer names the layer** (#39),
+  instead of reporting `dtype mismatch: expected F64, got F32 in matmul` —
+  an internal operation the caller did not write. `nn` and `optim` are
+  `f32` regardless of input dtype; that boundary is now stated in
+  `docs/LIMITATIONS.md`, and `Module::to_dtype` is recorded as deliberately
+  deferred rather than missing.
+- **Pins: reconverge 0.4.0 → 0.5.0, launchbound 2.0.0 → 2.1.0.** The other
+  two of the four pins did not move — reconverge 0.5.0 still records
+  `nightly-2026-04-03` and cuda-oxide `a766fc26` — so this is the
+  one-variable case, and the gate was re-measured rather than assumed:
+  0 findings at cc 7.5 and 8.6, 12 admitted and 0 refused at both, and the
+  over-cap tile still refused with RC004 at deny confidence. Identical to
+  the 0.4.0/2.0.0 result. Recorded in `docs/research-baseline.md` §(e).
+- **termlens 0.8.0 → 0.9.0**, and the pty tests moved to its idioms:
+  `bin!` for the spawn, `snapshot_after` in place of
+  `wait_until` + `wait_idle` + `screen()` (one settled instant instead of
+  three, and it waits on the picture holding still rather than on bytes
+  stopping), `wait_stable` after a resize, and `termlens::Result<()>` so a
+  failure prints the grid the application was showing.
+
+### Added
+
+- **A `cuda` feature, on by default** (#35). `--no-default-features` drops
+  `oxmera-cuda` and with it `cudarc`, `libloading` and the `ctor`/`dtor`
+  pair — seven crates, 47 → 40 — plus 88 KB of embedded PTX and a
+  pre-`main` constructor that `dlopen`s `libcuda`. All of that was
+  previously mandatory on every platform, *including macOS*, where NVIDIA
+  hardware cannot exist and Metal was correctly gated by target.
+  `Device::Cuda` remains a typed runtime error with the feature off, never
+  a compile error.
+- **A second CI configuration.** Until now every job built the workspace
+  defaults, so `--no-default-features` had never been compiled — which is
+  how a mandatory CUDA backend went unnoticed for two releases. A feature
+  nothing builds is a feature that is already broken. The job also asserts
+  that `cudarc`, `libloading`, `ctor` and `oxmera-cuda` are absent from the
+  graph.
+- **`just ptx`**, which regenerates `kernels.ptx` and its fingerprint
+  together. The command previously lived only in the maintainer's notes.
+- **Guards, so each fix survives the next release.** A test that the facade
+  description names every backend; one that `doctor` names every op family
+  the release ships (whole-word — the first version used `contains` and
+  passed with `eigh` deleted, because `weights` contains `eigh`); one that
+  capability rows fit an 80-column terminal; FNV-1a's published test
+  vectors, after the first draft of the fingerprint wrote the prime with
+  twelve hex digits instead of eleven.
+
 ## [0.3.0] — 2026-09-03
 
 The "what oxmega needs" milestone (#25–#30) plus the pins triage (#23):

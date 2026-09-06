@@ -59,15 +59,46 @@ fn reducing_a_nonempty_axis_of_a_tensor_with_an_empty_one_gives_an_empty_result(
     assert!(s.to_vec_f32().unwrap().is_empty());
 }
 
+/// `mean` over an empty extent is a typed error as of 0.4.0 (#38).
+///
+/// This test used to assert the opposite — `0/0 → NaN, as in IEEE and
+/// NumPy` — and that reasoning was sound in isolation. What decided it the
+/// other way was the company it kept: `sum` returns `0`, `max` returns
+/// `-inf`, `argmax` refuses, and `mean` returned `NaN`. Four reductions,
+/// four behaviours, one of which is a value that *looks* like an answer
+/// and is not.
+///
+/// The asymmetry that matters is composition. `sum`'s and `max`'s
+/// identities compose correctly under further reduction, so a caller who
+/// does not special-case the empty batch still gets the right answer.
+/// `NaN` does not compose — it flows into the loss, then into every
+/// gradient, and surfaces an epoch later as a model that stopped learning
+/// for no visible reason. `argmax` already refused precisely this input
+/// for precisely this reason.
 #[test]
-fn mean_of_nothing_is_nan_not_a_panic() {
-    let m = empty(&[0, 3]).mean(&[0, 1]).unwrap().to_vec_f32().unwrap();
-    assert_eq!(m.len(), 1);
+fn mean_of_nothing_is_a_typed_error() {
+    let err = empty(&[0, 3])
+        .mean(&[0, 1])
+        .expect_err("the mean of nothing is undefined and must not be a value");
+    let msg = err.to_string();
+    assert!(msg.contains("mean"), "the error must name the op: {msg}");
     assert!(
-        m[0].is_nan(),
-        "0/0 → NaN, as in IEEE and NumPy; got {}",
-        m[0]
+        msg.contains("extent 0") || msg.contains("0/0"),
+        "the error must say why: {msg}"
     );
+
+    // The two that keep their identities keep them, in the same test, so
+    // the distinction is visible to whoever reads this next.
+    assert_eq!(
+        empty(&[0, 3]).sum(&[0, 1]).unwrap().to_vec_f32().unwrap(),
+        vec![0.0]
+    );
+    assert!(empty(&[0, 3]).max(&[0, 1]).unwrap().to_vec_f32().unwrap()[0] == f32::NEG_INFINITY);
+
+    // And a mean over a *non-empty* axis of a tensor that merely has an
+    // empty one is untouched: nothing is divided by zero there.
+    let m = empty(&[0, 3]).mean(&[1]).unwrap();
+    assert_eq!(m.dims(), &[0]);
 }
 
 #[test]

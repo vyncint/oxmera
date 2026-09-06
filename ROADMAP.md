@@ -18,6 +18,16 @@ algebra (`cholesky`/`logdet`/`eigh`, differentiable Cholesky), rank-4+
 matmul broadcasting and `einsum`, per-group optimizer hyper-parameters,
 and `f64` tensors on the CPU.
 
+Shipped in 0.4.0 (the audit milestone, #33–#40): what the framework
+claimed, checked against what it did. Two correctness fixes — `eigh` now
+refuses a non-symmetric input instead of silently answering about
+`(A + Aᵀ)/2`, and the shipped PTX is fingerprinted against the CUDA source
+that produced it — plus the CUDA backend becoming an optional (default-on)
+feature, `oxmera doctor` assembling its capability list from the crates
+that implement them, `mean` over an empty extent becoming a typed error,
+the `nn` dtype boundary being stated and reported, and the terminal being
+given back when the dashboard is signalled.
+
 ## Next
 
 - [ ] Metal throughput: buffer pooling, MPS matmul option — with measured

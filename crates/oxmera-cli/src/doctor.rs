@@ -26,6 +26,21 @@ fn tool_line(name: &str, version: &Option<String>) -> String {
     }
 }
 
+/// Every crate's capability rows, in reading order: what a tensor is,
+/// then what you can differentiate, build, train and save.
+///
+/// The order is this function's business; the *content* belongs to the
+/// crate that implements it, so adding an op family is one line there and
+/// no line here. See [`oxmera::tensor::CAPABILITIES`].
+fn capabilities() -> Vec<(&'static str, &'static str)> {
+    let mut rows: Vec<(&'static str, &'static str)> = Vec::new();
+    rows.extend_from_slice(oxmera::tensor::CAPABILITIES);
+    rows.extend_from_slice(oxmera::autograd::CAPABILITIES);
+    rows.extend_from_slice(oxmera::nn::CAPABILITIES);
+    rows.extend_from_slice(oxmera::optim::CAPABILITIES);
+    rows
+}
+
 fn render(r: &Report) -> String {
     let mut out = String::new();
     let mut line = |s: String| {
@@ -92,14 +107,13 @@ fn render(r: &Report) -> String {
     line(String::new());
 
     line("capabilities".into());
-    line(
-        "  tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer".into(),
-    );
-    line("  autograd  reverse-mode tape, finite-difference verified".into());
-    line("  nn        Linear Conv2d Embedding LayerNorm BatchNorm2d Dropout Sequential".into());
-    line("  losses    MSE CrossEntropy BCEWithLogits".into());
-    line("  optim     SGD Adam AdamW RMSprop".into());
-    line("  weights   safetensors save/load".into());
+    // Assembled from the crates that implement them, not written here.
+    // The previous version was six string literals in this file, pinned by
+    // three golden frames — so a release could add `eigh`, `einsum`, `f64`
+    // and a whole CUDA backend without any of them appearing, and did.
+    for (area, detail) in capabilities() {
+        line(format!("  {area:<9} {detail}"));
+    }
     line(String::new());
 
     line("try: `oxmera train --tui` — the live training dashboard".into());

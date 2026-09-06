@@ -1,4 +1,4 @@
-size: 100x45  cursor: 27,0
+size: 100x45  cursor: 31,0
 oxmera doctor
 =============
 
@@ -16,12 +16,16 @@ devices
   cuda    not available on this host
 
 capabilities
-  tensor    f32 strided views, broadcasting, batched matmul, cross-device transfer
-  autograd  reverse-mode tape, finite-difference verified
+  tensor    strided views, broadcasting, batched matmul, device transfer
+  dtypes    f32 everywhere; f64 on the CPU; i64 indices; no promotion
+  linalg    eye diag trace, batched cholesky (differentiable) logdet det eigh
+  einsum    one- and two-operand contractions with an explicit output
+  indexing  index_select / index_add, native on Metal and CUDA
+  autograd  reverse-mode tape, finite-difference verified, no_grad guard
   nn        Linear Conv2d Embedding LayerNorm BatchNorm2d Dropout Sequential
   losses    MSE CrossEntropy BCEWithLogits
-  optim     SGD Adam AdamW RMSprop
-  weights   safetensors save/load
+  weights   safetensors save/load by parameter name
+  optim     SGD Adam AdamW RMSprop, per-group lr/decay, fused GPU step
 
 try: `oxmera train --tui` — the live training dashboard
 

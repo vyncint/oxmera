@@ -51,6 +51,13 @@ oxmera train --tui --device metal    # watch a model train, live (Apple Silicon)
 oxmera train --tui --device cuda     # … or on an NVIDIA GPU
 ```
 
+The CUDA backend is on by default. If you will never use it —
+Apple Silicon, or a CPU-only box — `cargo add oxmera --no-default-features`
+drops it along with `cudarc`, `libloading`, the `ctor` pair, the embedded
+PTX and a pre-`main` constructor: seven crates out of the graph.
+`Device::Cuda` stays a typed runtime error either way, so nothing that
+names it stops compiling.
+
 CUDA needs only the NVIDIA driver at runtime (`libcuda`); if the driver is
 older than the toolkit that produced the shipped PTX, the kernels are
 rebuilt for your GPU through NVRTC when `libnvrtc` is present.
@@ -73,8 +80,19 @@ cargo run --release -p oxmera --example train_mnist -- --device metal
 - Terminal output is captured from a **real PTY** (via `termlens`) and
   compared to golden frames; a 100-iteration stress proves frame-for-frame
   determinism. No clocks, no absolute paths, no flaky snapshots.
+- **Errors name the input, the rule and usually the remedy.** `cholesky`
+  on a non-PD matrix reports the batch and the pivot; `einsum` names the
+  offending letter; `eigh` on a non-symmetric matrix says how far off it
+  is and how to symmetrize it; moving an `f64` tensor to a GPU tells you
+  to cast first. This is a deliberate property and it is tested.
+- **The shipped PTX is checked against the CUDA source that produced it.**
+  The crate carries the kernels twice — `kernels.cu` and a pre-assembled
+  `kernels.ptx` — and the driver picks between them at run time, so a
+  fingerprint written by the same command that writes the PTX fails the
+  build if they ever drift apart.
 - `cargo clippy -D warnings`, doc-warnings-as-errors, `cargo deny`
-  (licenses, bans, advisories), and a measured MSRV (1.88), all in CI.
+  (licenses, bans, advisories), a measured MSRV (1.88), and a second
+  build configuration (`--no-default-features`), all in CI.
 
 ## What this deliberately is not (yet)
 

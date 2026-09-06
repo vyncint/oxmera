@@ -16,7 +16,7 @@ authors = ["Vyncint Ng <vyncint@icloud.com>"]
 
 [dependencies]
 # The four-pin contract (CONTRIBUTING.md): this rev is what reconverge
-# 0.4.0 records as verified, on nightly-2026-04-03. `cuda-device` is the
+# 0.5.0 records as verified, on nightly-2026-04-03. `cuda-device` is the
 # only dependency kernels need; the host-side crates (cuda-core et al.)
 # require a CUDA toolkit and cannot build on macOS, so they stay out of
 # the graph until a host runtime exists to use them.

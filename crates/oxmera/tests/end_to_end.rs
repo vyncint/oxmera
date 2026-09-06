@@ -53,3 +53,22 @@ fn init_and_device_movement() {
         );
     }
 }
+
+/// The crate description is what a crates.io visitor reads before the
+/// README, and it went two releases without naming the CUDA backend —
+/// while `oxmera` depended on it unconditionally. Nothing failed, and the
+/// person who would have noticed is the one who did not arrive.
+///
+/// `env!` reads it at compile time from this package's own manifest, so
+/// the test cannot drift onto the wrong crate and needs no file parsing.
+#[test]
+fn the_facade_description_names_every_backend() {
+    let desc = env!("CARGO_PKG_DESCRIPTION");
+    for backend in ["CPU", "Metal", "CUDA"] {
+        assert!(
+            desc.contains(backend),
+            "{backend} is missing from the crate description, which is the \
+             line crates.io shows: {desc:?}"
+        );
+    }
+}

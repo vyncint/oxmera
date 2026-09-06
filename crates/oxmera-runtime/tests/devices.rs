@@ -42,3 +42,52 @@ fn init_reports_the_platform_devices() {
         }
     }
 }
+
+/// With the `cuda` feature off, naming the device must still **compile**
+/// and must still fail at run time the way it does on a machine with no
+/// NVIDIA card.
+///
+/// This is the contract that makes the feature safe to turn off: a
+/// consumer who writes `Device::Cuda { index: 0 }` behind a config flag
+/// keeps building. If turning the backend off ever made the *type*
+/// disappear, every such consumer would break at compile time on a
+/// dependency-graph change they did not make.
+///
+/// Runs in both configurations on purpose — with the feature on and no
+/// hardware the outcome is the same, and a test that only runs in one
+/// configuration would not be pinning a contract about both.
+#[test]
+fn naming_cuda_compiles_and_fails_at_run_time_without_the_backend() {
+    oxmera_runtime::init();
+    let t = oxmera_tensor::Tensor::from_vec_f32(vec![1.0, 2.0], [2]).unwrap();
+    match t.to_device(oxmera_core::Device::Cuda { index: 0 }) {
+        // A machine with a driver and the feature on: the round trip is exact.
+        Ok(g) => assert_eq!(
+            g.to_device(oxmera_core::Device::Cpu)
+                .unwrap()
+                .to_vec_f32()
+                .unwrap(),
+            vec![1.0, 2.0]
+        ),
+        Err(e) => {
+            let msg = e.to_string().to_lowercase();
+            assert!(
+                msg.contains("cuda") || msg.contains("backend") || msg.contains("device"),
+                "the error has to name what was unavailable, got: {e}"
+            );
+        }
+    }
+}
+
+/// The CPU is always there, feature or no feature — the property that
+/// makes `--no-default-features` a reduction rather than a mutilation.
+#[test]
+fn the_cpu_backend_survives_every_feature_combination() {
+    let devices = oxmera_runtime::init();
+    assert!(
+        devices.contains(&oxmera_core::Device::Cpu),
+        "registered devices: {devices:?}"
+    );
+    let t = oxmera_tensor::Tensor::from_vec_f32(vec![1.0, -2.0], [2]).unwrap();
+    assert_eq!(t.relu().unwrap().to_vec_f32().unwrap(), vec![1.0, 0.0]);
+}

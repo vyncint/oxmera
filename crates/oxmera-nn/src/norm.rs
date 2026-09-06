@@ -34,6 +34,7 @@ impl LayerNorm {
 
 impl Module for LayerNorm {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
+        crate::check_param_dtype("LayerNorm", input, &self.parameters())?;
         let last = input.ndim().checked_sub(1).ok_or(Error::InvalidArgument {
             op: "LayerNorm",
             detail: "input must have at least one dimension".into(),
@@ -99,6 +100,7 @@ impl BatchNorm2d {
 
 impl Module for BatchNorm2d {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
+        crate::check_param_dtype("BatchNorm2d", input, &self.parameters())?;
         if input.ndim() != 4 || input.dims()[1] != self.channels {
             return Err(Error::ShapeMismatch {
                 expected: Shape::from([0, self.channels, 0, 0]),
