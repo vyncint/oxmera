@@ -5,10 +5,10 @@
 //! know about tensors, storage, backends, or dispatch. Everything may depend
 //! on it; it depends on nothing but `std` and `thiserror`.
 //!
-//! Status: seams only. Every function that computes something is `todo!()` —
-//! the shape/stride arithmetic (A1), broadcasting rules (A2), and error
-//! taxonomy refinement (A5) are exercise rungs, implemented by the
-//! maintainer, specified by the tests in `exercises/`.
+//! It defines tensor data types, validated shapes and strides, memory layouts,
+//! device handles, and the shared error taxonomy used throughout the workspace.
+//! These backend-independent primitives keep representation and validation
+//! rules consistent across CPU, Metal, and CUDA implementations.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

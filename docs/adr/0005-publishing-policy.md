@@ -1,6 +1,6 @@
 # ADR-0005 — Publishing policy
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-21
 
 ## Context
