@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# The vendored termlens skill must name the version this repository depends on.
+# Everything that names a termlens version must name the one we depend on.
+#
+# termlens pairs with nothing and moves alone, so its version is written down
+# in five places (CONTRIBUTING.md lists them). The 0.11 bump moved three and
+# left two — `PIN_TERMLENS` and CONTRIBUTING's own line — at 0.10.1, where
+# nothing would have noticed until the Monday pins watch filed a drift issue
+# about a bump that had already happened (#68). Each of these is silent when
+# it goes stale, which is why the check covers the list rather than one entry.
 #
 # `.claude/skills/termlens/SKILL.md` is a copy of the file termlens ships for
 # coding agents. It is refreshed by hand, and the failure mode is silent: the
@@ -16,16 +23,20 @@
 # Compares major.minor only. A termlens patch release does not rewrite the
 # skill, and demanding a re-copy for every one of them would make this noise.
 #
-# Usage: check-skill-version.sh [SKILL.md] [Cargo.toml]
+# Usage: check-skill-version.sh [SKILL.md] [Cargo.toml] [pins.yml] [CONTRIBUTING.md] [Cargo.lock]
 set -euo pipefail
 
 skill="${1:-.claude/skills/termlens/SKILL.md}"
 # termlens is a dev-dependency of exactly one crate, not a workspace
 # dependency (see CONTRIBUTING.md: it pairs with nothing and moves alone).
 manifest="${2:-crates/oxmera-cli/Cargo.toml}"
+pins="${3:-.github/workflows/pins.yml}"
+contributing="${4:-CONTRIBUTING.md}"
+lock="${5:-Cargo.lock}"
 
-[ -f "$skill" ] || { echo "::error::$skill does not exist"; exit 1; }
-[ -f "$manifest" ] || { echo "::error::$manifest does not exist"; exit 1; }
+for f in "$skill" "$manifest" "$pins" "$contributing" "$lock"; do
+  [ -f "$f" ] || { echo "::error::$f does not exist"; exit 1; }
+done
 
 # "Written against **termlens 0.10.1**." -> 0.10
 skill_version="$(sed -n 's/.*Written against \*\*termlens \([0-9][0-9.]*\)\*\*.*/\1/p' "$skill" | head -1)"
@@ -73,3 +84,47 @@ if [ -n "$cli_pins" ]; then
   done
   echo "the termlens-cli pins in .github/workflows ($(echo "$cli_pins" | tr '\n' ' ')) match the dependency (${dep_version})"
 fi
+
+# `PIN_TERMLENS` is what the weekly pins watch compares with crates.io's newest
+# release, so it has to name the version this repository actually resolves —
+# not the requirement, which is a range that several releases satisfy. When the
+# two part company the watch reports drift toward a version we already have and
+# opens an issue for a bump that is already done. Exact, not major.minor,
+# because exact is what the watch compares.
+locked="$(sed -n '/^name = "termlens"$/,/^$/ s/^version = "\([0-9][0-9.]*\)"/\1/p' "$lock" | head -1)"
+[ -n "$locked" ] || {
+  echo "::error::no resolved termlens version found in $lock"
+  exit 1
+}
+
+pin_version="$(sed -n 's/^ *PIN_TERMLENS: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\} *$/\1/p' "$pins" | head -1)"
+[ -n "$pin_version" ] || {
+  echo "::error::no PIN_TERMLENS: X.Y.Z line found in $pins"
+  exit 1
+}
+
+if [ "$pin_version" != "$locked" ]; then
+  echo "::error::$pins pins termlens ${pin_version} but $lock resolves ${locked}."
+  echo "::error::Set PIN_TERMLENS to ${locked}, or the Monday pins watch files drift for a bump that already happened."
+  exit 1
+fi
+
+echo "PIN_TERMLENS (${pin_version}) matches the resolved dependency (${locked})"
+
+# CONTRIBUTING's termlens paragraph opens by naming the current version, and it
+# is the list every bump is supposed to follow. A list that misstates its own
+# subject is the least likely thing to be reread.
+doc_version="$(sed -n 's/.*`termlens` (currently \([0-9][0-9.]*\)).*/\1/p' "$contributing" | head -1)"
+[ -n "$doc_version" ] || {
+  echo "::error::$contributing has no '\`termlens\` (currently X.Y)' line to check"
+  exit 1
+}
+doc_minor="$(echo "$doc_version" | cut -d. -f1,2)"
+
+if [ "$doc_minor" != "$dep_minor" ]; then
+  echo "::error::$contributing says termlens is currently ${doc_version} but this repository depends on ${dep_version}."
+  echo "::error::Update that line; it is the checklist every termlens bump follows."
+  exit 1
+fi
+
+echo "$contributing (${doc_version}) matches the dependency (${dep_version})"

@@ -10,8 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **termlens 0.10.1 → 0.11**, with the vendored skill and the report
-  action's `cli-version:` pins in `ci.yml` and `stress.yml`
-  (`check-skill-version.sh` holds all three equal to the dependency). 0.11
+  action's `cli-version:` pins in `ci.yml` and `stress.yml`. 0.11
   is termlens's stability candidate: from it no promised item changes
   incompatibly before its 1.0, so this requirement should hold for a while.
 
@@ -27,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The pin's known-defect caveat goes with it: termlens#320, which named
   blink and strikethrough as unsupported although the attribute shadow
   implements them, was fixed upstream in 0.10.2.
+
+  The bump moved three of the places that name the version and left two:
+  `PIN_TERMLENS` in `pins.yml` and CONTRIBUTING's own line, both still at
+  0.10.1. Nothing would have caught that until the weekly pins watch
+  compared the stale pin with crates.io and filed a drift issue for a bump
+  that had already happened. Both are corrected, and
+  `check-skill-version.sh` now checks every entry on CONTRIBUTING's
+  must-touch list instead of the vendored skill alone —
+  `PIN_TERMLENS` against `Cargo.lock` exactly, because an exact version is
+  what the watch compares, and the rest on major.minor as before.
 
 - **termlens 0.9.0 → 0.10.1**, with the `serde` feature, and the terminal
   suite grown into the surface it opens. No call site broke: the crate never
