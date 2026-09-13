@@ -8,7 +8,7 @@ use crate::{Module, init};
 
 /// A learnable lookup table: `I64` indices of any shape in, embeddings of
 /// shape `indices.shape() + [dim]` out.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Embedding {
     weight: Param,
     dim: usize,
@@ -21,6 +21,17 @@ impl Embedding {
             weight: Param::new(init::xavier_uniform([vocab, dim], vocab, dim, seed)),
             dim,
         }
+    }
+
+    /// Create an independent copy of this layer and its parameter table.
+    ///
+    /// Parameters are not implicitly cloneable because [`Param::clone`]
+    /// intentionally preserves parameter sharing for optimizers.
+    pub fn deep_clone(&self) -> Result<Self> {
+        Ok(Self {
+            weight: self.weight.detached_copy()?,
+            dim: self.dim,
+        })
     }
 
     /// The `[vocab, dim]` weight handle.
