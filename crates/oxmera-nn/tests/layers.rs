@@ -218,3 +218,47 @@ fn safetensors_round_trip() {
     assert_close(&before, &after, 1e-6, "safetensors round trip");
     std::fs::remove_file(&path).ok();
 }
+
+#[test]
+fn deep_clone_detaches_layer_parameters() {
+    let linear = Linear::new(2, 2, 1);
+    linear
+        .weight()
+        .set(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], [2, 2]).unwrap());
+    linear
+        .bias()
+        .unwrap()
+        .set(Tensor::from_slice(&[5.0, 6.0], [2]).unwrap());
+    let linear_copy = linear.deep_clone().unwrap();
+    linear.weight().set(Tensor::zeros([2, 2]));
+    linear.bias().unwrap().set(Tensor::zeros([2]));
+    assert_eq!(
+        linear_copy.weight().value().to_vec_f32().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0]
+    );
+    assert_eq!(
+        linear_copy.bias().unwrap().value().to_vec_f32().unwrap(),
+        vec![5.0, 6.0]
+    );
+
+    let conv = Conv2d::new(1, 1, (2, 2), 1, 0, 2);
+    conv.weight()
+        .set(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], [1, 1, 2, 2]).unwrap());
+    let conv_copy = conv.deep_clone().unwrap();
+    conv.weight().set(Tensor::zeros([1, 1, 2, 2]));
+    assert_eq!(
+        conv_copy.weight().value().to_vec_f32().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0]
+    );
+
+    let embedding = Embedding::new(2, 2, 3);
+    embedding
+        .weight()
+        .set(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], [2, 2]).unwrap());
+    let embedding_copy = embedding.deep_clone().unwrap();
+    embedding.weight().set(Tensor::zeros([2, 2]));
+    assert_eq!(
+        embedding_copy.weight().value().to_vec_f32().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0]
+    );
+}

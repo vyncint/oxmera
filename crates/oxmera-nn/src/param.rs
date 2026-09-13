@@ -2,13 +2,16 @@
 
 use std::sync::{Arc, RwLock};
 
+use oxmera_core::Result;
 use oxmera_tensor::tensor::Tensor;
 
 /// A learnable parameter: a shared, replaceable handle to a
 /// gradient-accumulating leaf tensor.
 ///
 /// Modules read the current value each forward pass; optimizers write
-/// updated values back through the same handle.
+/// updated values back through the same handle. Cloning a `Param` shares
+/// that handle intentionally, while [`Param::detached_copy`] creates an
+/// independent parameter for explicitly copying a module.
 #[derive(Debug, Clone)]
 pub struct Param {
     inner: Arc<RwLock<Tensor>>,
@@ -20,6 +23,15 @@ impl Param {
         Self {
             inner: Arc::new(RwLock::new(value.detach().requires_grad_(true))),
         }
+    }
+
+    /// Create an independent parameter with the same current value.
+    ///
+    /// Unlike [`Clone::clone`], this copies the tensor storage and starts a
+    /// fresh gradient-accumulating leaf. The copy remains on the same device
+    /// and keeps the source tensor's dtype and shape.
+    pub fn detached_copy(&self) -> Result<Self> {
+        Ok(Self::new(self.value().contiguous_untracked()?))
     }
 
     /// The current value (a cheap clone sharing storage and tape state).

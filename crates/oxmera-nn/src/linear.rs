@@ -8,7 +8,7 @@ use crate::{Module, init};
 
 /// `y = x Wᵀ + b`: input `[batch, in_features]`, output
 /// `[batch, out_features]`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Linear {
     weight: Param,
     bias: Option<Param>,
@@ -37,6 +37,17 @@ impl Linear {
             )),
             bias: None,
         }
+    }
+
+    /// Create an independent copy of this layer and all of its parameters.
+    ///
+    /// Parameters are not implicitly cloneable because [`Param::clone`]
+    /// intentionally preserves parameter sharing for optimizers.
+    pub fn deep_clone(&self) -> Result<Self> {
+        Ok(Self {
+            weight: self.weight.detached_copy()?,
+            bias: self.bias.as_ref().map(Param::detached_copy).transpose()?,
+        })
     }
 
     /// The `[out, in]` weight handle.

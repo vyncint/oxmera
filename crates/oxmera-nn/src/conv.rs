@@ -11,7 +11,7 @@ use crate::{Module, init};
 
 /// 2-D convolution: input `[n, c_in, h, w]`, output
 /// `[n, c_out, h_out, w_out]`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Conv2d {
     weight: Param,
     bias: Option<Param>,
@@ -46,6 +46,22 @@ impl Conv2d {
             stride,
             padding,
         }
+    }
+
+    /// Create an independent copy of this layer and all of its parameters.
+    ///
+    /// Parameters are not implicitly cloneable because [`Param::clone`]
+    /// intentionally preserves parameter sharing for optimizers.
+    pub fn deep_clone(&self) -> Result<Self> {
+        Ok(Self {
+            weight: self.weight.detached_copy()?,
+            bias: self.bias.as_ref().map(Param::detached_copy).transpose()?,
+            in_channels: self.in_channels,
+            out_channels: self.out_channels,
+            kernel: self.kernel,
+            stride: self.stride,
+            padding: self.padding,
+        })
     }
 
     /// The `[c_out, c_in, kh, kw]` weight handle.
