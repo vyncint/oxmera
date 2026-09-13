@@ -262,3 +262,33 @@ fn deep_clone_detaches_layer_parameters() {
         vec![1.0, 2.0, 3.0, 4.0]
     );
 }
+
+#[test]
+fn a_deep_cloned_layer_is_still_trainable() {
+    // Value independence is only half of it: a copy that is no longer a
+    // gradient-accumulating leaf would pass every assertion above and then
+    // silently never learn. Pin the leaf, and pin that the two layers
+    // accumulate separately.
+    let linear = Linear::new(2, 2, 1);
+    let copy = linear.deep_clone().unwrap();
+    assert!(
+        copy.weight().value().requires_grad(),
+        "a deep-cloned weight must still be a gradient-accumulating leaf"
+    );
+
+    let x = Tensor::from_slice(&[1.0, 1.0], [1, 2]).unwrap();
+    copy.forward(&x)
+        .unwrap()
+        .sum(&[])
+        .unwrap()
+        .backward()
+        .unwrap();
+    assert!(
+        copy.weight().grad().is_some(),
+        "the copy must accumulate its own gradient"
+    );
+    assert!(
+        linear.weight().grad().is_none(),
+        "the original must not see the copy's gradient"
+    );
+}

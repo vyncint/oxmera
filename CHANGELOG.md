@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`Linear`, `Conv2d` and `Embedding` no longer implement `Clone`.**
+  Breaking. `Param` is a shared handle by design, so deriving `Clone` on a
+  layer produced a copy that trained together with the original: setting a
+  weight on one changed the other, which is weight tying by accident and
+  had no warning anywhere. Each of the three now has
+  `deep_clone() -> Result<Self>`, which copies the storage and returns an
+  independent layer, and `Param::detached_copy()` is the same operation one
+  level down. `Param` itself still clones as a shared handle — optimizers
+  and `parameters()` depend on that, and it is now documented as
+  deliberate rather than implied.
+
+  Nothing in the workspace cloned these layers, so the break is confined to
+  out-of-tree callers; the fix at a call site is `.deep_clone()?`.
+
 - **termlens 0.10.1 → 0.11**, with the vendored skill and the report
   action's `cli-version:` pins in `ci.yml` and `stress.yml`
   (`check-skill-version.sh` holds all three equal to the dependency). 0.11
