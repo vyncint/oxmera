@@ -7,6 +7,10 @@ them before opening a PR — they are enforced by CI, not by goodwill.
 
 - **DCO sign-off and a cryptographic signature.** `git commit -sS` is the
   only spelling. The `Signed-off-by:` trailer must match the author.
+  Maintainers: when you compose a squash body by hand, carry every
+  contributor's `Signed-off-by:` into it. GitHub writes the author field of
+  a squash from the account, which may be an address that appears on none of
+  the commits, so the squash is the only place their assertion is recorded.
 - **Conventional Commits**: `feat:`, `fix:`, `docs:`, `test:`, `ci:`,
   `chore:`, `refactor:`, `perf:`, plus `exercise:` for changes to the
   exercise ladder.

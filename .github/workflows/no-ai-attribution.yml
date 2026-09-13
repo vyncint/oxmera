@@ -47,27 +47,45 @@ jobs:
             if printf '%s' "$body" | grep -q $'\xF0\x9F\xA4\x96'; then
               echo "::error::$sha contains the robot emoji"; fail=1
             fi
-            # DCO: the trailer must match the author. One documented
-            # equivalence, and it runs in **both** directions: GitHub's
-            # squash/rebase merges rewrite the author email, pairing an
-            # account's real address with its
-            # <id>+<login>@users.noreply.github.com form. Which of the two
-            # lands in the author field is GitHub's choice and has changed:
-            # every merge on this branch before e1ceae0 was authored as the
-            # noreply address with a real address in the trailer, and
-            # e1ceae0 is the same person the other way round. The rule the
-            # original comment states — same person, so a trailer matching
-            # the author NAME satisfies it — covers both; only the test
-            # assumed one side.
+            # DCO: the trailer must match the author, except on commits
+            # GitHub composed rather than a human.
             #
-            # So the exemption asks whether *either* address is a GitHub
-            # noreply form, which is the signature of a rewrite, and then
-            # requires the names to be equal. A commit with neither form
-            # still needs an exact email match, which is every commit made
-            # on a branch by a human.
+            # A squash or rebase merge performed by github.com writes the
+            # author field itself, choosing from the addresses on the
+            # account. It is GitHub's choice, not an assertion by the
+            # person: #44 widened this for the pairing of an account's real
+            # address with its <id>+<login>@users.noreply.github.com form,
+            # but that shape is not the rule. An outside contributor's
+            # squash landed as <jackchen@haloailabs.com> while every commit
+            # they pushed was authored and signed off as
+            # <nightcityblade@gmail.com> — two real addresses, neither a
+            # noreply form, and the old exemption could not see it.
+            #
+            # The signature of a GitHub-composed commit is the COMMITTER,
+            # which is always GitHub <noreply@github.com>. That is what this
+            # tests now, and it is the same rule oxidelake and termlens use.
+            #
+            # For such a commit the requirement is that a DCO assertion is
+            # present, not that it matches an address GitHub picked. The
+            # matching is already enforced where it means something: this
+            # same job runs on every pull request over the contributor's own
+            # commits, which they authored and pushed, and those take the
+            # exact-match branch below. A squash cannot reach main without
+            # that having passed first.
+            #
+            # What this does NOT catch: a maintainer writing a custom squash
+            # body that drops the contributor's trailer. ca56368d is exactly
+            # that and its record is poorer for it. The PR-time check is what
+            # stands behind the assertion; keep contributors' Signed-off-by
+            # lines when composing a squash body.
+            committer_email=$(git log -1 --format='%ce' "$sha")
             trailer_email=$(printf '%s' "$body" | sed -n 's/^Signed-off-by: .*<\(.*\)>$/\1/p' | head -1)
             noreply='^[0-9]+\+.*@users\.noreply\.github\.com$'
-            if ! printf '%s' "$body" | grep -q "Signed-off-by:.*<$author_email>"; then
+            if [ "$committer_email" = "noreply@github.com" ]; then
+              if ! printf '%s' "$body" | grep -qi '^signed-off-by:'; then
+                echo "::error::$sha was composed by GitHub and carries no Signed-off-by at all"; fail=1
+              fi
+            elif ! printf '%s' "$body" | grep -q "Signed-off-by:.*<$author_email>"; then
               if { printf '%s' "$author_email" | grep -qE "$noreply" \
                    || printf '%s' "$trailer_email" | grep -qE "$noreply"; } \
                  && printf '%s' "$body" | grep -q "Signed-off-by: $author_name <"; then
