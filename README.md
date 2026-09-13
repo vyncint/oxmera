@@ -3,15 +3,17 @@
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSE-MIT)
 [![crates.io](https://img.shields.io/crates/v/oxmera?label=crates.io)](https://crates.io/crates/oxmera)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange)](Cargo.toml)
-[![GPU](https://img.shields.io/badge/Apple%20Metal-accelerated-brightgreen)](crates/oxmera-metal)
+[![Metal](https://img.shields.io/badge/Apple%20Metal-accelerated-brightgreen)](crates/oxmera-metal)
+[![CUDA](https://img.shields.io/badge/NVIDIA%20CUDA-accelerated-76B900)](crates/oxmera-cuda)
 [![ci](https://img.shields.io/github/actions/workflow/status/vyncint/oxmera/ci.yml?label=ci)](https://github.com/vyncint/oxmera/actions/workflows/ci.yml)
 [![stress](https://img.shields.io/github/actions/workflow/status/vyncint/oxmera/stress.yml?label=pty%20stress)](https://github.com/vyncint/oxmera/actions/workflows/stress.yml)
 
-A Rust-native tensor and deep-learning framework: multi-threaded CPU and
-**Apple-Silicon Metal** backends, tape-based reverse-mode **autograd**,
-neural-network layers and optimizers, **safetensors** weights, and an
-interactive **terminal training dashboard** — every terminal surface tested
-through a real PTY with deterministic golden frames.
+A Rust-native tensor and deep-learning framework: multi-threaded CPU,
+**Apple-Silicon Metal** and **NVIDIA CUDA** backends, tape-based
+reverse-mode **autograd**, neural-network layers and optimizers,
+**safetensors** weights, and an interactive **terminal training
+dashboard** — every terminal surface tested through a real PTY with
+deterministic golden frames.
 
 ```rust
 use oxmera::nn::{CrossEntropyLoss, Linear, Module, Sequential};
@@ -36,7 +38,7 @@ let logits = model.forward(&x)?;
 | devices | CPU (rayon-parallel, cache-tiled GEMM), Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory) and NVIDIA CUDA (the same kernels in CUDA C, shipped as PTX and driven through the driver API — no CUDA toolkit needed to build, `libcuda` found at runtime); `tensor.to_device(...)` moves data, autograd flows across the move |
 | autograd | tape-based reverse mode: `requires_grad`, `backward()`, gradient accumulation, `no_grad` RAII guard — every VJP validated by finite differences in CI |
 | nn | `Linear`, `Conv2d`, `Embedding`, `LayerNorm`, `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`, `BCEWithLogitsLoss`; Kaiming/Xavier initializers |
-| optim | `SGD` (momentum, weight decay), `Adam`, `AdamW`, `RMSprop` — all with per-group learning rate and weight decay (`ParamGroup`); one fused launch per parameter on Metal and CUDA |
+| optim | `SGD` (momentum), `Adam` and `AdamW` with per-group learning rate and weight decay (`ParamGroup`); decay-free `RMSprop` with per-group learning rate; `Adam`/`AdamW` take one fused launch per parameter on Metal and CUDA |
 | linalg | `eye`/`diag`/`diag_embed`/`trace`, batched `cholesky` (differentiable), `logdet`/`det`, `eigh`; rank-4+ matmul broadcasting and a two-operand `einsum` |
 | weights | zero-config `safetensors` save/load by parameter name |
 | terminal | `oxmera doctor` (hardware, devices, capabilities) and `oxmera train --tui` (live loss/accuracy sparklines, progress gauges, throughput, unified-memory usage) — both golden-tested through a real PTY with a 100-iteration determinism stress |
