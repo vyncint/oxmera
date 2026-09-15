@@ -1,20 +1,18 @@
 //! Runtime concerns: backend availability, explicit initialization, and
 //! the inference (`no_grad`) context.
 //!
-//! Backends self-register at load time when linked; this crate links the
-//! CPU backend unconditionally, the Metal backend on macOS, and the CUDA
-//! backend when the default `cuda` feature is on — so depending on
-//! `oxmera-runtime` (or the `oxmera` umbrella) guarantees a working
-//! default device set. [`init`] exists for contexts that want the
-//! registration to be explicit and checkable.
+//! Backends are registered explicitly, not before `main`: [`init`]
+//! registers the CPU backend unconditionally, the Metal backend on macOS,
+//! and the CUDA backend when the default `cuda` feature is on, then
+//! returns the available device set. Call it once before using a non-CPU
+//! device; the CPU backend also registers itself on first use. The `oxmera`
+//! umbrella and the CLI call `init` for you.
 //!
-//! Turning `cuda` off removes `cudarc`, `libloading` and the `ctor`/`dtor`
-//! pair from the graph, the shipped PTX from the binary, and a pre-`main`
-//! constructor that `dlopen`s `libcuda` from the process. What it does not
-//! change is the *type*: [`oxmera_core::Device::Cuda`] still exists and
-//! still resolves to a typed error at run time, so a caller that names the
-//! device compiles either way and finds out the same way it would on a
-//! machine with no NVIDIA card.
+//! Turning `cuda` off removes `cudarc`, `libloading` and the shipped PTX
+//! from the binary. What it does not change is the *type*:
+//! [`oxmera_core::Device::Cuda`] still exists and still resolves to a typed
+//! error at run time, so a caller that names the device compiles either way
+//! and finds out the same way it would on a machine with no NVIDIA card.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -24,11 +22,12 @@ use oxmera_core::{Device, Result};
 pub use oxmera_tensor::autograd::{NoGradGuard, no_grad};
 pub use oxmera_tensor::backend::{Backend, backend_for, register_backend, registered_devices};
 
-/// Ensure the default backends for this platform are registered, and
-/// report the devices available.
+/// Register the default backends for this platform and report the devices
+/// available.
 ///
-/// Load-time constructors normally make this unnecessary; calling it is
-/// harmless and returns the registered device list either way.
+/// Call this once before using a non-CPU device. It is idempotent, so
+/// calling it again — or when only the CPU is needed — is harmless and
+/// returns the registered device list either way.
 pub fn init() -> Vec<Device> {
     oxmera_cpu::register();
     #[cfg(target_os = "macos")]

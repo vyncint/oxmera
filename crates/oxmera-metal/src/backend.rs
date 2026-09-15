@@ -62,13 +62,22 @@ impl TensorMeta {
         }
         let mut meta = TensorMeta {
             rank: dims.len() as u32,
-            offset: offset as u32,
+            offset: u32::try_from(offset).map_err(|_| Error::InvalidArgument {
+                op,
+                detail: format!("offset {offset} exceeds the u32 limit of GPU kernels"),
+            })?,
             dims: [1; MAX_RANK],
             strides: [0; MAX_RANK],
         };
         for (i, (&d, &s)) in dims.iter().zip(strides).enumerate() {
-            meta.dims[i] = d as u32;
-            meta.strides[i] = s as i32;
+            meta.dims[i] = u32::try_from(d).map_err(|_| Error::InvalidArgument {
+                op,
+                detail: format!("extent {d} exceeds the u32 limit of GPU kernels"),
+            })?;
+            meta.strides[i] = i32::try_from(s).map_err(|_| Error::InvalidArgument {
+                op,
+                detail: format!("stride {s} does not fit in i32 for a GPU kernel"),
+            })?;
         }
         Ok(meta)
     }

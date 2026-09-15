@@ -17,8 +17,8 @@
 //!
 //! Unsafe policy: every `unsafe` block is FFI-adjacent — a kernel launch
 //! whose argument list is checked against the kernel signature, a `dlopen`
-//! probe, a `#[repr(C)]` argument marker, or life-before-main registration —
-//! and carries a `// SAFETY:` justification.
+//! probe, or a `#[repr(C)]` argument marker — and carries a `// SAFETY:`
+//! justification.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
@@ -29,13 +29,3 @@ pub use backend::{
     CudaBackend, device_summary, is_driver_present, register_default, source_fingerprint,
 };
 
-// SAFETY: runs before main via the platform's initializer section. The body
-// probes for libcuda (a dlopen that fails cleanly when the library is
-// absent), optionally creates a context, and inserts into the
-// std-synchronized backend registry; no thread-locals, no other crate's
-// statics.
-#[allow(unsafe_code)]
-#[ctor::ctor(crate_path = ::ctor)]
-unsafe fn auto_register() {
-    register_default();
-}

@@ -3,12 +3,12 @@
 //! multiplication, over unified-memory (`StorageModeShared`) buffers.
 //!
 //! On non-macOS targets this crate compiles to an empty stub so the
-//! workspace builds everywhere; the backend registers itself at load time
-//! on macOS only.
+//! workspace builds everywhere. Registration is explicit: call
+//! [`register_default`] — or `oxmera_runtime::init()` — on macOS.
 //!
 //! Unsafe policy: every `unsafe` block in this crate is FFI-adjacent —
-//! reading a Metal buffer's contents pointer or life-before-main
-//! registration — and carries a `// SAFETY:` justification.
+//! reading a Metal buffer's contents pointer — and carries a `// SAFETY:`
+//! justification.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
@@ -24,13 +24,3 @@ pub use backend::{MetalBackend, device_summary, register_default};
 #[cfg(not(target_os = "macos"))]
 pub fn register_default() {}
 
-// SAFETY: runs before main via the platform's initializer section. The
-// body only queries the Metal device list and inserts into the
-// std-synchronized backend registry; no thread-locals, no other crate's
-// statics.
-#[cfg(target_os = "macos")]
-#[allow(unsafe_code)]
-#[ctor::ctor(crate_path = ::ctor)]
-unsafe fn auto_register() {
-    register_default();
-}

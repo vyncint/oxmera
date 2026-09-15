@@ -12,7 +12,6 @@ authors.workspace = true
 [dependencies]
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
-ctor = "0.6.3"
 # The driver library is resolved at runtime (dlopen), never linked: a
 # machine without libcuda simply has no CUDA device. The `cuda-12080`
 # bindings run against any driver from the 12.8 series up, including 13.x.
