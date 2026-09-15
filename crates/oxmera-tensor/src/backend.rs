@@ -220,6 +220,7 @@ impl ReduceOp {
 /// are 0 for a broadcast operand, so no backend has to materialize the
 /// broadcast — batch `i` of `a` starts at `i * a_batch_stride`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MatmulPlan {
     /// Output batch count (1 for a rank-2 result).
     pub batch: usize,
@@ -313,6 +314,7 @@ pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
 /// ([`Backend::adam_step`]). Tensors are `f32` on the backend's device;
 /// `m`/`v` are `None` on the first step.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct AdamStep<'a> {
     /// Current parameter value.
     pub param: &'a Tensor,
@@ -339,6 +341,43 @@ pub struct AdamStep<'a> {
     pub bias_correction1: f32,
     /// `1 - β₂ᵗ` for this step.
     pub bias_correction2: f32,
+}
+
+impl<'a> AdamStep<'a> {
+    /// Assemble a fused-step descriptor. Arguments are in declaration
+    /// order; `m`/`v` are `None` before the first step. A constructor
+    /// because the struct is `#[non_exhaustive]` and is built in the optim
+    /// crate.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        param: &'a Tensor,
+        grad: &'a Tensor,
+        m: Option<&'a Tensor>,
+        v: Option<&'a Tensor>,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        eps: f32,
+        weight_decay: f32,
+        decoupled: bool,
+        bias_correction1: f32,
+        bias_correction2: f32,
+    ) -> Self {
+        Self {
+            param,
+            grad,
+            m,
+            v,
+            lr,
+            beta1,
+            beta2,
+            eps,
+            weight_decay,
+            decoupled,
+            bias_correction1,
+            bias_correction2,
+        }
+    }
 }
 
 /// A complete backend: every primitive the tensor method layer dispatches.

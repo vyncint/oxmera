@@ -103,6 +103,7 @@ fn adam_trains_an_mlp_to_solve_xor() {
 }
 
 /// A parameter-free activation module for test pipelines.
+#[derive(Debug)]
 struct Tanh;
 
 impl Module for Tanh {
@@ -118,11 +119,11 @@ impl Module for Tanh {
 }
 
 #[test]
-fn optimizer_reports_missing_gradients() {
+fn optimizer_skips_parameters_without_a_gradient() {
+    // A parameter that never received a gradient is skipped, not an error
+    // that fails the whole step — matching PyTorch's grad=None handling.
     let x = Param::new(Tensor::zeros(Shape::from([2])));
-    let mut opt = Sgd::new(vec![x], 0.1);
-    assert!(
-        opt.step().is_err(),
-        "step without backward must be a typed error"
-    );
+    let mut opt = Sgd::new(vec![x.clone()], 0.1);
+    assert!(opt.step().is_ok(), "a step with no gradients is a no-op");
+    assert_eq!(x.value().to_vec_f32().unwrap(), vec![0.0, 0.0], "unchanged");
 }

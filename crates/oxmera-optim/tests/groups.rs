@@ -168,3 +168,38 @@ fn zero_grad_clears_every_group() {
     opt.zero_grad();
     assert!(a.grad().is_none() && b.grad().is_none());
 }
+
+#[test]
+fn step_skips_a_parameter_without_a_gradient() {
+    let a = leaf(&[1.0, 2.0]);
+    let b = leaf(&[3.0, 4.0]);
+    // Only `a` receives a gradient.
+    a.value().sum(&[]).unwrap().backward().unwrap();
+    let mut opt = Sgd::new(vec![a.clone(), b.clone()], 0.1);
+    opt.step().unwrap(); // must not fail the whole step over b
+    assert_ne!(a.value().to_vec_f32().unwrap(), vec![1.0, 2.0], "a updated");
+    assert_eq!(
+        b.value().to_vec_f32().unwrap(),
+        vec![3.0, 4.0],
+        "b untouched"
+    );
+}
+
+#[test]
+fn optimizer_hyperparameter_builders_apply() {
+    let p = leaf(&[1.0, 2.0]);
+    backward_ones(std::slice::from_ref(&p));
+    let mut adam = Adam::new(vec![p.clone()], 0.1)
+        .with_betas(0.5, 0.9)
+        .with_eps(1e-3);
+    adam.step().unwrap();
+    assert_ne!(p.value().to_vec_f32().unwrap(), vec![1.0, 2.0]);
+
+    let q = leaf(&[1.0]);
+    backward_ones(std::slice::from_ref(&q));
+    let mut rms = RmsProp::new(vec![q.clone()], 0.1)
+        .with_alpha(0.9)
+        .with_eps(1e-5);
+    rms.step().unwrap();
+    assert_ne!(q.value().to_vec_f32().unwrap(), vec![1.0]);
+}

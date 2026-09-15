@@ -243,6 +243,7 @@ fn memory_label(device: Device) -> String {
 }
 
 /// Parameter-free tanh activation for the demo pipeline.
+#[derive(Debug)]
 struct Activation;
 
 impl Module for Activation {

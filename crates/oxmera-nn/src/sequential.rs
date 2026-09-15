@@ -7,7 +7,7 @@ use crate::{Module, Param};
 
 /// Modules applied in order. Parameter names are prefixed by child index
 /// (`0.weight`, `1.bias`, …), matching the common convention.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Sequential {
     children: Vec<Box<dyn Module>>,
 }
@@ -32,6 +32,24 @@ impl Sequential {
     /// Whether the pipeline is empty.
     pub fn is_empty(&self) -> bool {
         self.children.is_empty()
+    }
+
+    /// A borrowing iterator over the child modules, in order.
+    pub fn iter(&self) -> impl Iterator<Item = &dyn Module> {
+        self.children.iter().map(|c| &**c)
+    }
+
+    /// The child module at `index`, or `None` if out of range.
+    pub fn get(&self, index: usize) -> Option<&dyn Module> {
+        self.children.get(index).map(|c| &**c)
+    }
+}
+
+impl std::ops::Index<usize> for Sequential {
+    type Output = dyn Module;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &*self.children[index]
     }
 }
 

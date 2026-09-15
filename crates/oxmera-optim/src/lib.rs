@@ -34,6 +34,7 @@ pub trait Optimizer {
 /// `step()`, each with its own settings, and share the optimizer's global
 /// state (Adam's bias-correction step count, for instance).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ParamGroup {
     /// The parameters in this group.
     pub params: Vec<Param>,
@@ -58,13 +59,6 @@ impl ParamGroup {
     pub fn with_lr(params: Vec<Param>, lr: f32) -> Self {
         Self::new(params, lr, 0.0)
     }
-}
-
-fn grad_of(param: &Param) -> Result<Tensor> {
-    param.grad().ok_or(Error::InvalidArgument {
-        op: "Optimizer::step",
-        detail: "parameter has no gradient; run backward() first".into(),
-    })
 }
 
 fn zero_all(groups: &[ParamGroup]) {
@@ -120,8 +114,10 @@ impl Optimizer for Sgd {
         no_grad(|| {
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {
+                    let Some(mut grad) = param.grad() else {
+                        continue;
+                    };
                     let value = param.value().detach();
-                    let mut grad = grad_of(param)?;
                     if group.weight_decay != 0.0 {
                         grad = grad.add(&value.mul_scalar(group.weight_decay)?)?;
                     }
@@ -184,25 +180,27 @@ impl AdamCore {
             let bc2 = 1.0 - self.beta2.powi(self.step);
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {
+                    let Some(mut grad) = param.grad() else {
+                        continue;
+                    };
                     let mut value = param.value().detach();
-                    let mut grad = grad_of(param)?;
                     // A GPU backend fuses the whole update into one launch;
                     // the composite path below is the reference it must match.
                     if value.device() != Device::Cpu {
-                        let step = AdamStep {
-                            param: &value,
-                            grad: &grad,
-                            m: self.m[gi][i].as_ref(),
-                            v: self.v[gi][i].as_ref(),
-                            lr: group.lr,
-                            beta1: self.beta1,
-                            beta2: self.beta2,
-                            eps: self.eps,
-                            weight_decay: group.weight_decay,
-                            decoupled: self.decoupled,
-                            bias_correction1: bc1,
-                            bias_correction2: bc2,
-                        };
+                        let step = AdamStep::new(
+                            &value,
+                            &grad,
+                            self.m[gi][i].as_ref(),
+                            self.v[gi][i].as_ref(),
+                            group.lr,
+                            self.beta1,
+                            self.beta2,
+                            self.eps,
+                            group.weight_decay,
+                            self.decoupled,
+                            bc1,
+                            bc2,
+                        );
                         match backend_for(value.device())?.adam_step(&step) {
                             Ok((p, m, v)) => {
                                 self.m[gi][i] = Some(m);
@@ -273,6 +271,21 @@ impl Adam {
         Self(AdamCore::new(groups, false))
     }
 
+    /// Override the exponential decay rates (defaults β₁ 0.9, β₂ 0.999),
+    /// builder-style.
+    pub fn with_betas(mut self, beta1: f32, beta2: f32) -> Self {
+        self.0.beta1 = beta1;
+        self.0.beta2 = beta2;
+        self
+    }
+
+    /// Override the numerical-stability epsilon (default 1e-8),
+    /// builder-style.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.0.eps = eps;
+        self
+    }
+
     /// The parameter groups, for schedules that adjust `lr` between steps.
     pub fn groups_mut(&mut self) -> &mut [ParamGroup] {
         &mut self.0.groups
@@ -301,6 +314,21 @@ impl AdamW {
     /// rate and decoupled weight decay.
     pub fn with_groups(groups: Vec<ParamGroup>) -> Self {
         Self(AdamCore::new(groups, true))
+    }
+
+    /// Override the exponential decay rates (defaults β₁ 0.9, β₂ 0.999),
+    /// builder-style.
+    pub fn with_betas(mut self, beta1: f32, beta2: f32) -> Self {
+        self.0.beta1 = beta1;
+        self.0.beta2 = beta2;
+        self
+    }
+
+    /// Override the numerical-stability epsilon (default 1e-8),
+    /// builder-style.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.0.eps = eps;
+        self
     }
 
     /// The parameter groups, for schedules that adjust `lr` between steps.
@@ -345,6 +373,19 @@ impl RmsProp {
         }
     }
 
+    /// Override the smoothing constant α (default 0.99), builder-style.
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    /// Override the numerical-stability epsilon (default 1e-8),
+    /// builder-style.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
+
     /// The parameter groups, for schedules that adjust `lr` between steps.
     pub fn groups_mut(&mut self) -> &mut [ParamGroup] {
         &mut self.groups
@@ -356,8 +397,10 @@ impl Optimizer for RmsProp {
         no_grad(|| {
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {
+                    let Some(grad) = param.grad() else {
+                        continue;
+                    };
                     let value = param.value().detach();
-                    let grad = grad_of(param)?;
                     let g2 = grad.mul(&grad)?;
                     let sq = match &self.sq[gi][i] {
                         Some(s) => s

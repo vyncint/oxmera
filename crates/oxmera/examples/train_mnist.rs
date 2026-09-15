@@ -15,6 +15,7 @@ use oxmera::nn::{CrossEntropyLoss, Linear, Module, Param, Sequential};
 use oxmera::optim::{Adam, Optimizer};
 use oxmera::{Device, Result, Shape, Tensor};
 
+#[derive(Debug)]
 struct Activation;
 
 impl Module for Activation {

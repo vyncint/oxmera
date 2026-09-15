@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use oxmera_core::Result;
+use oxmera_core::{Device, Result};
 use oxmera_tensor::tensor::Tensor;
 
 /// A learnable parameter: a shared, replaceable handle to a
@@ -42,6 +42,21 @@ impl Param {
     /// Replace the value with a fresh gradient-accumulating leaf.
     pub fn set(&self, value: Tensor) {
         *self.inner.write().expect("param lock poisoned") = value.detach().requires_grad_(true);
+    }
+
+    /// Move the parameter's value to `device` in place.
+    ///
+    /// The shared handle means every holder — the owning module and any
+    /// optimizer state keyed on this `Param` — sees the moved tensor, so a
+    /// model's weights upload once instead of the forward pass re-uploading
+    /// them on every call. A no-op when the value is already on `device`.
+    pub fn to_device(&self, device: Device) -> Result<()> {
+        let current = self.value();
+        if current.device() == device {
+            return Ok(());
+        }
+        self.set(current.to_device(device)?);
+        Ok(())
     }
 
     /// The gradient accumulated on the current value, if any.

@@ -25,7 +25,7 @@ pub use norm::{BatchNorm2d, LayerNorm};
 pub use param::Param;
 pub use sequential::Sequential;
 
-use oxmera_core::{Error, Result};
+use oxmera_core::{Device, Error, Result};
 use oxmera_tensor::tensor::Tensor;
 
 /// Refuse an input whose dtype the module's parameters cannot meet.
@@ -70,7 +70,7 @@ pub fn check_param_dtype(layer: &'static str, input: &Tensor, params: &[Param]) 
 
 /// A neural-network component: a differentiable function of its input and
 /// a set of learnable parameters.
-pub trait Module: Send + Sync {
+pub trait Module: Send + Sync + std::fmt::Debug {
     /// Apply the module.
     fn forward(&self, input: &Tensor) -> Result<Tensor>;
 
@@ -94,6 +94,19 @@ pub trait Module: Send + Sync {
     /// Switch training-mode behaviour (dropout, batch-norm statistics).
     /// Modules without mode-dependent behaviour ignore this.
     fn set_training(&self, _training: bool) {}
+
+    /// Move every parameter to `device`.
+    ///
+    /// Layers read their parameters on each forward, so once the weights
+    /// live on `device` the per-forward device transfer is a no-op and
+    /// device-resident fused kernels (such as the fused Adam step) engage.
+    /// Containers inherit this through `parameters()`.
+    fn to_device(&self, device: Device) -> Result<()> {
+        for p in self.parameters() {
+            p.to_device(device)?;
+        }
+        Ok(())
+    }
 }
 
 /// What this crate can do, for `oxmera doctor`. See
