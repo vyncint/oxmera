@@ -84,6 +84,18 @@ impl Module for Conv2d {
         let (n, _c, h, w) = (dims[0], dims[1], dims[2], dims[3]);
         let (kh, kw) = self.kernel;
         let (s, p) = (self.stride, self.padding);
+        if s == 0 {
+            return Err(Error::InvalidArgument {
+                op: "Conv2d",
+                detail: "stride must be >= 1".into(),
+            });
+        }
+        if h + 2 * p < kh || w + 2 * p < kw {
+            return Err(Error::InvalidArgument {
+                op: "Conv2d",
+                detail: format!("input {h}x{w} padded by {p} is smaller than kernel {kh}x{kw}"),
+            });
+        }
         let h_out = (h + 2 * p - kh) / s + 1;
         let w_out = (w + 2 * p - kw) / s + 1;
 

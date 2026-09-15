@@ -259,14 +259,20 @@ pub(crate) fn argmax(a: &Tensor, dim: usize, keepdim: bool) -> Result<Tensor> {
             let mut best_i = 0i64;
             for j in 0..n {
                 let v = src[(offset + j as isize * s) as usize];
+                if v.is_nan() {
+                    return Err(Error::InvalidArgument {
+                        op: "argmax",
+                        detail: "input contains NaN; the maximum is undefined".into(),
+                    });
+                }
                 if v > best {
                     best = v;
                     best_i = j as i64;
                 }
             }
-            best_i
+            Ok(best_i)
         })
-        .collect();
+        .collect::<Result<Vec<i64>>>()?;
     Tensor::from_vec_i64(out, Shape::new(out_dims))
 }
 

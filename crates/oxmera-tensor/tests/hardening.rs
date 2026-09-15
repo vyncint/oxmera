@@ -67,3 +67,14 @@ fn debug_prints_metadata_not_the_buffer() {
         "must not dump the storage: {s}"
     );
 }
+
+#[test]
+fn argmax_reports_nan_instead_of_hiding_it() {
+    let t = Tensor::from_slice(&[1.0, f32::NAN, 2.0], [3]).unwrap();
+    assert!(
+        t.argmax(0, false).is_err(),
+        "NaN input must be a typed error"
+    );
+    let ok = Tensor::from_slice(&[1.0, 3.0, 2.0], [3]).unwrap();
+    assert_eq!(ok.argmax(0, false).unwrap().to_vec_i64().unwrap(), vec![1]);
+}
