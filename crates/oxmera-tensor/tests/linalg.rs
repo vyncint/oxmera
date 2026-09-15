@@ -191,3 +191,25 @@ fn eigh_handles_an_indefinite_matrix_and_a_diagonal_one() {
         assert!((vv[row * 3 + col].abs() - 1.0).abs() < 1e-6, "{vv:?}");
     }
 }
+
+#[test]
+fn eigh_preserves_f64_precision_instead_of_rounding_to_f32() {
+    // Two eigenvalues that differ below f32 resolution near 1.0 (f32 eps
+    // is ~1.2e-7). Pre-0.5 the f64 path rounded the input to f32 first and
+    // collapsed them onto the same value.
+    let eps = 1e-10f64;
+    let a = oxmera_tensor::Tensor::from_vec_f64(vec![1.0 + eps, 0.0, 0.0, 1.0], [2, 2]).unwrap();
+    let (w, _v) = a.eigh().unwrap();
+    assert_eq!(
+        w.dtype(),
+        oxmera_core::DType::F64,
+        "an f64 input keeps an f64 spectrum"
+    );
+    let wv = w.to_vec_f64().unwrap();
+    assert!((wv[0] - 1.0).abs() < 1e-13, "{wv:?}");
+    assert!((wv[1] - (1.0 + eps)).abs() < 1e-13, "{wv:?}");
+    assert!(
+        wv[1] - wv[0] > 1e-11,
+        "the two eigenvalues stay distinct: {wv:?}"
+    );
+}

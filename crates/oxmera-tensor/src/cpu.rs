@@ -462,11 +462,11 @@ impl Backend for CpuBackend {
         // The Jacobi routine works in f64 internally; an f64 input keeps
         // its result in f64.
         if a.dtype() == DType::F64 {
-            let data: Vec<f32> = a.to_vec_f64()?.iter().map(|&x| x as f32).collect();
-            let (w, v) = crate::cpu_linalg::eigh(&data, batch, n);
+            let data = a.to_vec_f64()?;
+            let (w, v) = crate::cpu_linalg::eigh_f64(&data, batch, n);
             return Ok((
-                Tensor::from_vec_f64(w.iter().map(|&x| x as f64).collect(), Shape::new(wshape))?,
-                Tensor::from_vec_f64(v.iter().map(|&x| x as f64).collect(), a.shape().clone())?,
+                Tensor::from_vec_f64(w, Shape::new(wshape))?,
+                Tensor::from_vec_f64(v, a.shape().clone())?,
             ));
         }
         f32_input(a, "eigh")?;
