@@ -524,6 +524,7 @@ impl Backend for CudaBackend {
             a_batch_stride,
             b_batch_stride,
             out_shape,
+            ..
         } = plan_matmul(a.shape(), b.shape())?;
         let ab = self.buf_of(&a, "matmul")?;
         let bb = self.buf_of(&b, "matmul")?;
