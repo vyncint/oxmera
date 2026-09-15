@@ -18,11 +18,26 @@ use crate::storage::{CpuStorage, Storage};
 /// refcount, never the data. View operations (`reshape`, `permute`,
 /// `narrow`, …) produce new tensors over the same storage whenever the
 /// layout arithmetic allows it.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Tensor {
     storage: Arc<Storage>,
     layout: Layout,
     autograd: Option<Arc<AutogradMeta>>,
+}
+
+impl std::fmt::Debug for Tensor {
+    /// Prints only the tensor's metadata — shape, dtype, device and
+    /// whether it tracks gradients. Never the storage contents: a tensor
+    /// can hold gigabytes, and a derived `Debug` dumped all of it into
+    /// every log line and panic message.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tensor")
+            .field("shape", self.shape())
+            .field("dtype", &self.dtype())
+            .field("device", &self.device())
+            .field("requires_grad", &self.requires_grad())
+            .finish()
+    }
 }
 
 impl Tensor {
@@ -32,12 +47,14 @@ impl Tensor {
     ///
     /// Errors when the layout addresses elements outside the storage.
     pub fn from_storage(storage: Arc<Storage>, layout: Layout) -> Result<Self> {
-        let needed = max_addressed(&layout);
-        let available = storage_len(&storage);
-        if needed > available {
+        let (lo, hi) = addressed_bounds(&layout);
+        let available = storage_len(&storage) as isize;
+        if lo < 0 || hi > available {
             return Err(Error::InvalidArgument {
                 op: "Tensor::from_storage",
-                detail: format!("layout addresses {needed} elements, storage holds {available}"),
+                detail: format!(
+                    "layout addresses [{lo}, {hi}) but storage holds {available} elements"
+                ),
             });
         }
         Ok(Self {
@@ -111,24 +128,55 @@ impl Tensor {
     }
 
     /// A CPU tensor of zeros.
+    ///
+    /// # Panics
+    /// Panics if the shape's element count overflows `usize`. Build the
+    /// shape from untrusted input through [`Tensor::try_zeros`] for a
+    /// typed error instead.
     pub fn zeros(shape: impl Into<Shape>) -> Self {
+        Self::try_zeros(shape).expect("shape element count overflows usize")
+    }
+
+    /// A CPU tensor of zeros, or [`Error::InvalidArgument`] when the
+    /// shape's element count overflows `usize`.
+    pub fn try_zeros(shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
-        let numel = shape.numel();
-        Self::from_vec_f32(vec![0.0; numel], shape).expect("lengths match by construction")
+        let numel = checked_numel(&shape, "Tensor::try_zeros")?;
+        Self::from_vec_f32(vec![0.0; numel], shape)
     }
 
     /// A CPU tensor of ones.
+    ///
+    /// # Panics
+    /// Panics if the shape's element count overflows `usize`; see
+    /// [`Tensor::try_ones`].
     pub fn ones(shape: impl Into<Shape>) -> Self {
+        Self::try_ones(shape).expect("shape element count overflows usize")
+    }
+
+    /// A CPU tensor of ones, or [`Error::InvalidArgument`] when the
+    /// shape's element count overflows `usize`.
+    pub fn try_ones(shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
-        let numel = shape.numel();
-        Self::from_vec_f32(vec![1.0; numel], shape).expect("lengths match by construction")
+        let numel = checked_numel(&shape, "Tensor::try_ones")?;
+        Self::from_vec_f32(vec![1.0; numel], shape)
     }
 
     /// A CPU tensor filled with `value`.
+    ///
+    /// # Panics
+    /// Panics if the shape's element count overflows `usize`; see
+    /// [`Tensor::try_full`].
     pub fn full(shape: impl Into<Shape>, value: f32) -> Self {
+        Self::try_full(shape, value).expect("shape element count overflows usize")
+    }
+
+    /// A CPU tensor filled with `value`, or [`Error::InvalidArgument`]
+    /// when the shape's element count overflows `usize`.
+    pub fn try_full(shape: impl Into<Shape>, value: f32) -> Result<Self> {
         let shape = shape.into();
-        let numel = shape.numel();
-        Self::from_vec_f32(vec![value; numel], shape).expect("lengths match by construction")
+        let numel = checked_numel(&shape, "Tensor::try_full")?;
+        Self::from_vec_f32(vec![value; numel], shape)
     }
 
     /// A rank-0 scalar tensor.
@@ -331,12 +379,12 @@ impl Tensor {
     /// A view of `len` elements of dimension `dim` starting at `start`.
     pub fn narrow(&self, dim: usize, start: usize, len: usize) -> Result<Self> {
         let dims = self.dims();
-        if dim >= dims.len() || start + len > dims[dim] {
+        let end = start.checked_add(len);
+        if dim >= dims.len() || end.is_none_or(|e| e > dims[dim]) {
             return Err(Error::InvalidArgument {
                 op: "narrow",
                 detail: format!(
-                    "dim {dim}, range {start}..{} against shape {:?}",
-                    start + len,
+                    "dim {dim}, start {start} len {len} against shape {:?}",
                     self.shape()
                 ),
             });
@@ -607,17 +655,29 @@ fn storage_len(storage: &Storage) -> usize {
     }
 }
 
-fn max_addressed(layout: &Layout) -> usize {
+/// The half-open range of storage indices a layout can address, as
+/// `(min, max_exclusive)`. Negative strides lower the minimum below the
+/// offset, so a valid layout needs `min >= 0` as well as
+/// `max_exclusive <= storage length`; the pre-0.5 check accounted for
+/// positive strides only and let an underflowing negative-stride layout
+/// through to a panic on the first read.
+fn addressed_bounds(layout: &Layout) -> (isize, isize) {
     if layout.shape.numel() == 0 {
-        return 0;
+        return (0, 0);
     }
-    let mut max = layout.offset as isize;
+    let mut lo = layout.offset as isize;
+    let mut hi = layout.offset as isize;
     for (&d, &s) in layout.shape.dims().iter().zip(layout.strides.values()) {
-        if d > 1 && s > 0 {
-            max += (d as isize - 1) * s;
+        if d > 1 {
+            let span = (d as isize - 1) * s;
+            if s >= 0 {
+                hi += span;
+            } else {
+                lo += span;
+            }
         }
     }
-    (max + 1) as usize
+    (lo, hi + 1)
 }
 
 /// Broadcast `layout` to `target`, stride 0 on expanded axes.

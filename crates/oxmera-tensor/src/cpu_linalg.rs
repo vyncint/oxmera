@@ -119,17 +119,17 @@ pub fn cholesky_backward(l: &[f32], grad_l: &[f32], batch: usize, n: usize) -> V
 /// method: eigenvalues ascending (`[batch, n]`) and orthonormal
 /// eigenvectors as columns (`[batch, n, n]`, `A V = V Λ`). Reads the full
 /// matrix and symmetrizes it first.
-pub fn eigh(a: &[f32], batch: usize, n: usize) -> (Vec<f32>, Vec<f32>) {
+pub fn eigh_f64(a: &[f64], batch: usize, n: usize) -> (Vec<f64>, Vec<f64>) {
     let nn = n * n;
-    let mut values = vec![0.0f32; batch * n];
-    let mut vectors = vec![0.0f32; batch * nn];
+    let mut values = vec![0.0f64; batch * n];
+    let mut vectors = vec![0.0f64; batch * nn];
     let mut m = vec![0.0f64; nn];
     let mut v = vec![0.0f64; nn];
     for b in 0..batch {
         let src = &a[b * nn..(b + 1) * nn];
         for i in 0..n {
             for j in 0..n {
-                m[i * n + j] = 0.5 * (src[i * n + j] as f64 + src[j * n + i] as f64);
+                m[i * n + j] = 0.5 * (src[i * n + j] + src[j * n + i]);
                 v[i * n + j] = if i == j { 1.0 } else { 0.0 };
             }
         }
@@ -181,13 +181,26 @@ pub fn eigh(a: &[f32], batch: usize, n: usize) -> (Vec<f32>, Vec<f32>) {
         let mut order: Vec<usize> = (0..n).collect();
         order.sort_by(|&i, &j| m[i * n + i].total_cmp(&m[j * n + j]));
         for (slot, &i) in order.iter().enumerate() {
-            values[b * n + slot] = m[i * n + i] as f32;
+            values[b * n + slot] = m[i * n + i];
             for k in 0..n {
-                vectors[b * nn + k * n + slot] = v[k * n + i] as f32;
+                vectors[b * nn + k * n + slot] = v[k * n + i];
             }
         }
     }
     (values, vectors)
+}
+
+/// f32 convenience wrapper over [`eigh_f64`]: widens the input to `f64`,
+/// runs the same decomposition, then narrows the result. Behaves exactly
+/// like the former f32-in/f32-out routine — the Jacobi sweeps were always
+/// carried in f64.
+pub fn eigh(a: &[f32], batch: usize, n: usize) -> (Vec<f32>, Vec<f32>) {
+    let a64: Vec<f64> = a.iter().map(|&x| x as f64).collect();
+    let (w, v) = eigh_f64(&a64, batch, n);
+    (
+        w.into_iter().map(|x| x as f32).collect(),
+        v.into_iter().map(|x| x as f32).collect(),
+    )
 }
 
 #[cfg(test)]
