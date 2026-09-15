@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use oxmera_core::Result;
+use oxmera_core::{Error, Result};
 use oxmera_tensor::tensor::Tensor;
 use rand::{Rng, SeedableRng};
 
@@ -21,12 +21,23 @@ pub struct Dropout {
 
 impl Dropout {
     /// Dropout with drop probability `p` in `[0, 1)`.
-    pub fn new(p: f32, seed: u64) -> Self {
-        Self {
+    ///
+    /// Returns [`Error::InvalidArgument`] when `p` is outside `[0, 1)`: at
+    /// `p >= 1` every element is dropped and the survivors would be scaled
+    /// by `1/(1 - p) <= 0`, and a negative `p` is silently ignored by the
+    /// forward pass.
+    pub fn new(p: f32, seed: u64) -> Result<Self> {
+        if !(0.0..1.0).contains(&p) {
+            return Err(Error::InvalidArgument {
+                op: "Dropout",
+                detail: format!("drop probability must be in [0, 1), got {p}"),
+            });
+        }
+        Ok(Self {
             p,
             training: AtomicBool::new(true),
             seed: AtomicU64::new(seed),
-        }
+        })
     }
 }
 

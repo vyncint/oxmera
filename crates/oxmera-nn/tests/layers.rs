@@ -115,7 +115,7 @@ fn batchnorm_normalizes_in_train_and_uses_running_stats_in_eval() {
 
 #[test]
 fn dropout_is_identity_in_eval_and_scales_in_train() {
-    let d = Dropout::new(0.5, 13);
+    let d = Dropout::new(0.5, 13).unwrap();
     let x = Tensor::ones([1000]);
     let y = d.forward(&x).unwrap();
     let kept: Vec<f32> = y.to_vec_f32().unwrap();
@@ -291,4 +291,94 @@ fn a_deep_cloned_layer_is_still_trainable() {
         linear.weight().grad().is_none(),
         "the original must not see the copy's gradient"
     );
+}
+
+// ---- 0.5 hardening: typed refusals, richer Sequential, device moves ----
+
+#[test]
+fn cross_entropy_rejects_an_empty_batch() {
+    let logits = Tensor::from_vec_f32(vec![], [0, 3]).unwrap();
+    let target = Tensor::from_vec_i64(vec![], [0]).unwrap();
+    assert!(CrossEntropyLoss.forward(&logits, &target).is_err());
+}
+
+#[test]
+fn cross_entropy_rejects_a_mismatched_target_length() {
+    let logits = Tensor::from_slice(&[0.1, 0.2, 0.3, 0.4, 0.5, 0.6], [2, 3]).unwrap();
+    let target = Tensor::from_vec_i64(vec![0, 1, 2], [3]).unwrap();
+    assert!(CrossEntropyLoss.forward(&logits, &target).is_err());
+}
+
+#[test]
+fn mse_and_bce_reject_a_broadcastable_target() {
+    let input = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], [2, 2]).unwrap();
+    let broadcast = Tensor::from_slice(&[1.0, 1.0], [2]).unwrap();
+    assert!(MSELoss.forward(&input, &broadcast).is_err());
+    assert!(BCEWithLogitsLoss.forward(&input, &broadcast).is_err());
+    let exact = Tensor::from_slice(&[0.0, 1.0, 1.0, 0.0], [2, 2]).unwrap();
+    assert!(MSELoss.forward(&input, &exact).is_ok());
+}
+
+#[test]
+fn conv2d_rejects_subkernel_input_and_zero_stride() {
+    let c = Conv2d::new(1, 1, (3, 3), 1, 0, 7);
+    assert!(c.forward(&Tensor::zeros([1, 1, 2, 2])).is_err());
+    let zero = Conv2d::new(1, 1, (2, 2), 0, 0, 7);
+    assert!(zero.forward(&Tensor::zeros([1, 1, 4, 4])).is_err());
+}
+
+#[test]
+fn dropout_rejects_probability_outside_the_unit_interval() {
+    assert!(Dropout::new(1.0, 0).is_err());
+    assert!(Dropout::new(1.5, 0).is_err());
+    assert!(Dropout::new(-0.1, 0).is_err());
+    assert!(Dropout::new(0.0, 0).is_ok());
+    assert!(Dropout::new(0.999, 0).is_ok());
+}
+
+#[test]
+fn batchnorm_running_var_uses_the_unbiased_variance() {
+    let bn = BatchNorm2d::new(1);
+    let x = Tensor::from_slice(&[0.0, 2.0, 4.0, 6.0], [4, 1, 1, 1]).unwrap();
+    bn.forward(&x).unwrap();
+    bn.set_training(false);
+    // 1.3 - running_mean(0.3) = 1.0; y = 1/sqrt(running_var + eps).
+    let probe = Tensor::from_slice(&[1.3], [1, 1, 1, 1]).unwrap();
+    let y = bn.forward(&probe).unwrap().to_vec_f32().unwrap()[0];
+    // Unbiased running_var 0.9*1 + 0.1*(20/3) = 1.5667 -> 0.7989.
+    // The pre-0.5 biased value 1.4 would give 0.8452.
+    assert!(
+        (y - 0.7989).abs() < 2e-3,
+        "running_var should be unbiased; y = {y}"
+    );
+}
+
+#[test]
+fn sequential_is_debug_and_exposes_its_children() {
+    let net = Sequential::new()
+        .push(Linear::new(2, 3, 1))
+        .push(Linear::new(3, 1, 2));
+    assert_eq!(net.len(), 2);
+    assert!(net.get(0).is_some());
+    assert!(net.get(2).is_none());
+    assert_eq!(net.iter().count(), 2);
+    let _first: &dyn Module = &net[0];
+    let dbg = format!("{net:?}");
+    assert!(dbg.contains("Sequential"), "{dbg}");
+    assert!(dbg.contains("Linear"), "children should be shown: {dbg}");
+}
+
+#[test]
+fn module_to_device_cpu_is_a_noop_and_stays_trainable() {
+    let layer = Linear::new(2, 2, 3);
+    layer.to_device(oxmera_core::Device::Cpu).unwrap();
+    let x = Tensor::from_slice(&[1.0, 1.0], [1, 2]).unwrap();
+    layer
+        .forward(&x)
+        .unwrap()
+        .sum(&[])
+        .unwrap()
+        .backward()
+        .unwrap();
+    assert!(layer.weight().grad().is_some());
 }

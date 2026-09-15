@@ -30,6 +30,12 @@ impl LayerNorm {
             eps: 1e-5,
         }
     }
+
+    /// Set the numerical-stability epsilon (default `1e-5`), builder-style.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
 }
 
 impl Module for LayerNorm {
@@ -96,6 +102,18 @@ impl BatchNorm2d {
             training: AtomicBool::new(true),
         }
     }
+
+    /// Set the running-statistics momentum (default `0.1`), builder-style.
+    pub fn with_momentum(mut self, momentum: f32) -> Self {
+        self.momentum = momentum;
+        self
+    }
+
+    /// Set the numerical-stability epsilon (default `1e-5`), builder-style.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
 }
 
 impl Module for BatchNorm2d {
@@ -122,6 +140,15 @@ impl Module for BatchNorm2d {
                     .detach()
                     .to_device(oxmera_core::Device::Cpu)?
                     .reshape(Shape::from([self.channels]))?;
+                // The running estimate uses the unbiased sample variance
+                // (Bessel's correction), matching PyTorch; the current
+                // batch is still normalized with the biased `var` below.
+                let n_elem = (input.dims()[0] * input.dims()[2] * input.dims()[3]) as f32;
+                let flat_var = if n_elem > 1.0 {
+                    flat_var.mul_scalar(n_elem / (n_elem - 1.0))?
+                } else {
+                    flat_var
+                };
                 let mut rm = self.running_mean.lock().expect("bn lock poisoned");
                 let mut rv = self.running_var.lock().expect("bn lock poisoned");
                 *rm = rm
