@@ -40,3 +40,7 @@ signal-hook = "0.3"
 # It costs no new crate here: serde_json is already in the lockfile.
 termlens = { version = "0.11", features = ["serde"] }
 serde_json = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

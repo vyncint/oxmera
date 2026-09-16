@@ -29,3 +29,7 @@ oxmera-cuda = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 oxmera-metal.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

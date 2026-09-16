@@ -28,3 +28,7 @@ hardware = []
 [dev-dependencies]
 oxmera-nn.workspace = true
 oxmera-optim.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

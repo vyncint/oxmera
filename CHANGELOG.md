@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-09-16
+
+A second deep test of the published crates, this time reaching the autograd
+surface the first round never got to. No public API changed.
+
+### Fixed
+
+- **A deep tape aborted the process.** The tape is a linked structure and its
+  derived drop recursed once per node, overflowing the stack at roughly 20k
+  operations in debug and 65k in release — an abort, which no caller can
+  catch. `AutogradMeta` now dismantles the graph with an explicit worklist,
+  so depth costs heap instead of stack; a 200,000-node tape builds and drops
+  cleanly. Unrolled RNNs and long chains built before `backward` are the
+  ordinary way to hit this (#96).
+- **`matmul` disagreed with itself across its row paths.** The single-row
+  path skipped the multiply when the left operand was `0.0`, so `0 × ∞`
+  never happened there while the four-row block produced `NaN` — one call
+  returned `[NaN × 8, 0.0, 0.0]` for uniform input. Both paths now do the
+  same arithmetic (#98).
+- **`max`/`min` reductions silently discarded NaN.** `f32::max` returns the
+  non-NaN operand, so a NaN that `sum` propagates and `argmax` refuses
+  vanished through `max` — the op on the common path through pooling and
+  attention. NaN now propagates, matching `sum` (#97).
+- **Degenerate inputs panicked, aborted, or were silently accepted** where a
+  typed error is promised: `try_zeros`/`try_ones`/`try_full` *aborted the
+  process* on an allocation the allocator refused (they now use
+  `try_reserve_exact`, which is the entire point of a `try_` constructor);
+  `eye(n)` wrapped `n * n` and surfaced as an index-out-of-bounds (now a
+  checked, documented panic); `pad_dim` panicked on an out-of-range `dim`
+  and accepted it silently when the padding was zero, where its sibling
+  `cat` has always reported it; `kaiming_uniform`/`xavier_uniform` panicked
+  inside `rand` on a zero fan; and `slice` turned a reversed range into an
+  empty view (#99).
+- **Errors named the wrong thing.** `trace` reported an error naming `diag`,
+  an op the caller never wrote; `index_select` reported a negative index as
+  `index [0]`, an index that is valid, sending the reader to the wrong
+  element; and `matmul`'s rank error claimed "supported ranks are 2 and 3"
+  although rank-4 and rank-5 both work (#100).
+- **Documentation described behaviour the code does not have.**
+  `oxmera-tensor`'s crate doc and `register_backend` still taught load-time
+  registration, which 0.5.0 removed — following them produced a
+  `BackendUnavailable` the docs called impossible. `check_param_dtype`
+  promised `DTypeMismatch` and returns `InvalidArgument`. The README called
+  `reshape` zero-copy unconditionally. The top-level `--help` omitted
+  `--json` and `--seed`, which the subcommands' own help documents. And no
+  crate carried `[package.metadata.docs.rs]`, so docs.rs rendered
+  `oxmera-metal` as its non-macOS stub (#101).
+
+### Documented
+
+- **The `cholesky`/`logdet`/`det` gradient convention** (#95). The gradient
+  is taken with respect to *symmetric* perturbations — `d logdet/dA = A⁻¹`,
+  the standard result, matching PyTorch and verified against `eigh` in the
+  suite. Because the forward reads only the lower triangle, an elementwise
+  finite difference breaks symmetry and disagrees with it, so
+  `oxmera_autograd::gradcheck` cannot be applied to these three ops
+  directly; check them through a symmetrizer. This was true before and
+  written down nowhere, which is what made it look like a defect. The
+  rustdoc also claimed the backward pass runs in `f64`; it takes its inputs
+  as `f32`, so an `f64` gradient carries `f32` precision, and it now says so.
+
 ## [0.5.1] — 2026-09-16
 
 A patch release: ten defects found by deep-testing the published 0.5.0 as a
