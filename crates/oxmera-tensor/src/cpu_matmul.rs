@@ -22,6 +22,12 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Result<Tensor> {
         b_batch_stride,
         out_shape,
     } = plan;
+    if batch * m * n == 0 {
+        // No output elements. The batched path below would hand rayon a
+        // chunk size of zero and panic; the rank-2 path already returned
+        // the empty tensor, so the two disagreed.
+        return Tensor::from_vec_f32(Vec::new(), out_shape);
+    }
     let mut a_owned = None;
     let mut b_owned = None;
     let av = operand_slice(a, &mut a_owned)?;

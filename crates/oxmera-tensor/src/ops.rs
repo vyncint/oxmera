@@ -266,18 +266,26 @@ impl Tensor {
                     let gb = g.mul_raw(&o)?.mul_raw(&a.ln()?)?;
                     (Some(ga), Some(gb))
                 }
+                // A tie splits the gradient evenly — the convention
+                // docs/LIMITATIONS.md states. Sending all of it to one
+                // operand made every composite built on `maximum` silently
+                // wrong at a tie: BCEWithLogitsLoss is `max(x, 0) - x*t + …`,
+                // so at a logit of exactly 0 it returned `-t` instead of
+                // `sigmoid(0) - t`, and descent moved uphill.
                 BinaryOp::Maximum => {
-                    let mask = a.gt_mask(&b)?;
+                    let half = a.eq_mask(&b)?.mul_scalar(0.5)?;
+                    let wa = a.gt_mask(&b)?.add(&half)?;
                     let one = Tensor::scalar_on(&a, 1.0)?;
-                    let ga = g.mul_raw(&mask)?;
-                    let gb = g.mul_raw(&one.sub(&mask)?)?;
+                    let ga = g.mul_raw(&wa)?;
+                    let gb = g.mul_raw(&one.sub(&wa)?)?;
                     (Some(ga), Some(gb))
                 }
                 BinaryOp::Minimum => {
-                    let mask = b.gt_mask(&a)?;
+                    let half = a.eq_mask(&b)?.mul_scalar(0.5)?;
+                    let wa = b.gt_mask(&a)?.add(&half)?;
                     let one = Tensor::scalar_on(&a, 1.0)?;
-                    let ga = g.mul_raw(&mask)?;
-                    let gb = g.mul_raw(&one.sub(&mask)?)?;
+                    let ga = g.mul_raw(&wa)?;
+                    let gb = g.mul_raw(&one.sub(&wa)?)?;
                     (Some(ga), Some(gb))
                 }
                 BinaryOp::Gt | BinaryOp::Eq => (None, None),
@@ -556,8 +564,16 @@ impl Tensor {
                 ),
             });
         }
-        self.sum_keepdim(&axes_n, keepdim)?
-            .mul_scalar(1.0 / n as f32)
+        let summed = self.sum_keepdim(&axes_n, keepdim)?;
+        if summed.dtype() == DType::F64 {
+            // Scaling an f64 sum by an f32 reciprocal threw away every digit
+            // past f32 precision: mean([1,2,3]) came back 2.0000000596046448.
+            // Divide in the tensor's own dtype instead.
+            let divisor = Tensor::from_vec_f64(vec![n as f64], Shape::from([]))?
+                .to_device(summed.device())?;
+            return summed.div(&divisor);
+        }
+        summed.mul_scalar(1.0 / n as f32)
     }
 
     /// Index of the maximum along `dim`, as an `I64` tensor. Not
