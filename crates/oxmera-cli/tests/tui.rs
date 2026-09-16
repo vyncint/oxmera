@@ -159,3 +159,22 @@ fn stress_100_iterations_are_identical() -> termlens::Result<()> {
     }
     Ok(())
 }
+
+/// Ctrl-C typed into the dashboard is a key (raw mode disables ISIG, so it
+/// arrives as Char('c')+CONTROL, not a signal). Before 0.5 only q and Esc
+/// quit and it was silently dropped.
+#[test]
+fn ctrl_c_typed_into_the_dashboard_quits_and_restores() -> termlens::Result<()> {
+    let (mut t, _screen) = spawn((100, 45))?;
+    t.send(Key::Ctrl('c'))?;
+    let status = t.wait_exit()?;
+    assert!(
+        status.success(),
+        "ctrl-c should quit cleanly, got {status:?}"
+    );
+    assert!(
+        !t.screen().alternate_screen(),
+        "ctrl-c left the shell inside the alternate screen"
+    );
+    Ok(())
+}

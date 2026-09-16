@@ -2,10 +2,10 @@
 //! sources — probed from the machine, or injected from a fixture so the
 //! termlens goldens never depend on the machine they were blessed on.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Everything doctor knows about one machine.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Report {
     /// Operating system family: "macos", "linux", or other.
     pub os: String,
@@ -20,7 +20,7 @@ pub struct Report {
 }
 
 /// Hardware identity.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Host {
     /// Chip/SoC name (e.g. "Apple M3 Pro").
     pub chip: Option<String>,
@@ -33,7 +33,7 @@ pub struct Host {
 }
 
 /// Tool presence and versions. `None` means not found on PATH.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Toolchain {
     /// `rustc --version`.
     pub rustc: Option<String>,
@@ -42,7 +42,7 @@ pub struct Toolchain {
 }
 
 /// Compute devices.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Devices {
     /// Threads the CPU backend parallelizes across.
     pub cpu_threads: u32,
