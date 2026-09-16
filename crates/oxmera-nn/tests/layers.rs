@@ -404,3 +404,22 @@ fn bce_with_logits_gradient_is_exact_at_a_zero_logit() {
         "(sigmoid(0) - t) / n",
     );
 }
+
+#[test]
+fn pad_dim_reports_an_out_of_range_dim_like_cat_does() {
+    let t = Tensor::zeros([2usize]);
+    let e = oxmera_nn::functional::pad_dim(&t, 9, 1, 1)
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("pad_dim"), "{e}");
+    // Also rejected on the no-op path, which used to accept it silently.
+    assert!(oxmera_nn::functional::pad_dim(&t, 9, 0, 0).is_err());
+    assert!(oxmera_nn::functional::pad_dim(&t, 0, 1, 1).is_ok());
+}
+
+#[test]
+fn a_degenerate_fan_does_not_panic_the_initializer() {
+    // 6.0 / 0 is infinite and `rand` refuses a non-finite range.
+    let w = oxmera_nn::init::kaiming_uniform([2usize, 2], 0, 1);
+    assert!(w.to_vec_f32().unwrap().iter().all(|v| v.is_finite()));
+}
