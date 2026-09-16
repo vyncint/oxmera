@@ -955,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-autograd",
  "oxmera-core",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-autograd"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-tensor",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "crossterm",
  "oxmera",
@@ -993,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "proptest",
  "thiserror 2.0.20",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-cpu"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-tensor",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-cuda"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cudarc",
  "libloading",
@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-metal"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "metal",
  "oxmera-core",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-nn"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-tensor",
@@ -1042,7 +1042,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-ops"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-tensor",
@@ -1050,7 +1050,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-optim"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-nn",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-runtime"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "oxmera-core",
  "oxmera-cpu",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "oxmera-tensor"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "metal",
  "oxmera-core",

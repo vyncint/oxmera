@@ -38,7 +38,7 @@ let logits = model.forward(&x)?;
 | devices | CPU (rayon-parallel, cache-tiled GEMM), Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory) and NVIDIA CUDA (the same kernels in CUDA C, shipped as PTX and driven through the driver API — no CUDA toolkit needed to build, `libcuda` found at runtime); `tensor.to_device(...)` moves data, autograd flows across the move |
 | autograd | tape-based reverse mode: `requires_grad`, `backward()`, gradient accumulation, `no_grad` RAII guard — every VJP validated by finite differences in CI |
 | nn | `Linear`, `Conv2d`, `Embedding`, `LayerNorm`, `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`, `BCEWithLogitsLoss`; Kaiming/Xavier initializers |
-| optim | `SGD` (momentum), `Adam` and `AdamW` with per-group learning rate and weight decay (`ParamGroup`); decay-free `RMSprop` with per-group learning rate; `Adam`/`AdamW` take one fused launch per parameter on Metal and CUDA |
+| optim | `Sgd` (momentum), `Adam` and `AdamW` with per-group learning rate and weight decay (`ParamGroup`); decay-free `RmsProp` with per-group learning rate; `Adam`/`AdamW` take one fused launch per parameter on Metal and CUDA |
 | linalg | `eye`/`diag`/`diag_embed`/`trace`, batched `cholesky` (differentiable), `logdet`/`det`, `eigh`; rank-4+ matmul broadcasting and a two-operand `einsum` |
 | weights | zero-config `safetensors` save/load by parameter name |
 | terminal | `oxmera doctor` (hardware, devices, capabilities) and `oxmera train --tui` (live loss/accuracy sparklines, progress gauges, throughput, unified-memory usage) — both golden-tested through a real PTY with a 100-iteration determinism stress |
@@ -55,8 +55,8 @@ oxmera train --tui --device cuda     # … or on an NVIDIA GPU
 
 The CUDA backend is on by default. If you will never use it —
 Apple Silicon, or a CPU-only box — `cargo add oxmera --no-default-features`
-drops it along with `cudarc`, `libloading`, the `ctor` pair, the embedded
-PTX and a pre-`main` constructor: seven crates out of the graph.
+drops it along with `cudarc`, `libloading` and the embedded PTX: three
+crates out of the graph, 43 → 40.
 `Device::Cuda` stays a typed runtime error either way, so nothing that
 names it stops compiling.
 
