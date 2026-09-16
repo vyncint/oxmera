@@ -55,9 +55,11 @@ numbers come from re-runnable commands.
   `(A + Aᵀ)/2` with no error.
 - **The CUDA backend is a default feature, and can be turned off.**
   `cargo add oxmera --no-default-features` drops `oxmera-cuda` — and with
-  it `cudarc`, `libloading`, the `ctor`/`dtor` pair, 88 KB of embedded PTX,
-  and a pre-`main` constructor that `dlopen`s `libcuda`. Seven crates leave
-  the graph, 47 → 40. `Device::Cuda` remains a *typed runtime error* in
+  it `cudarc`, `libloading` and 88 KB of embedded PTX. Three crates leave
+  the graph, 43 → 40, measured with `cargo tree -e normal`. (0.5 removed the
+  pre-`main` `ctor` registration this paragraph used to describe, so it no
+  longer leaves with the feature — it is gone either way.)
+  `Device::Cuda` remains a *typed runtime error* in
   that configuration, never a compile error, so code naming the device
   still builds. Metal stays gated by target rather than by feature,
   because it cannot build off macOS at all. Before 0.4.0 CUDA was

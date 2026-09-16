@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Nothing is released yet. When releases exist, only the latest published
-version of each crate is supported.
+Only the latest published version of each crate is supported. Fixes land on
+`main` and ship in the next release; there are no backports to earlier
+versions.
 
 ## Reporting a vulnerability
 

@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-09-16
+
+A patch release: ten defects found by deep-testing the published 0.5.0 as a
+downstream consumer of the crates.io artifacts rather than as the repository.
+Every fix carries a regression test; no public API changed.
+
+### Fixed
+
+- **`maximum`/`minimum` gave a tie's whole gradient to one operand**, so
+  every composite built on them was wrong at a tie. `BCEWithLogitsLoss` is
+  `max(x, 0) - x·t + …`, so at a logit of exactly `0.0` it returned `-t`
+  instead of `sigmoid(0) - t`, and one SGD step on a balanced batch *raised*
+  the loss from 0.6931472 to 0.724077. A tie now splits evenly — the
+  convention `docs/LIMITATIONS.md` already documented. `relu'(0) = 0` is
+  unchanged: `relu` has its own VJP and never went through `maximum` (#84).
+- **`Tensor::from_storage`'s bounds check overflowed `isize`**, panicking
+  inside a `Result`-returning constructor in debug and *accepting* an
+  out-of-bounds layout in release, where the first read then indexed far
+  past the buffer. The check now uses checked arithmetic throughout and
+  treats any overflow as "cannot be proven in bounds" (#85).
+- **Batched `matmul` panicked** with rayon's `chunk_size must not be zero`
+  when the output had a zero-size dimension, while the rank-2 path returned
+  the empty tensor. Both return it now; a zero *inner* dimension still
+  produces the zero-filled result it should (#86).
+- **`mean` on an `f64` tensor was scaled by an `f32` reciprocal**, so every
+  f64 mean carried f32 precision — `mean([1, 2, 3])` came back
+  `2.0000000596046448`. The division happens in the tensor's own dtype (#87).
+- **Adam/AdamW bias correction used one global step counter**, so a
+  parameter whose gradient arrived late had its first update mis-scaled — two
+  parameters with identical first gradients moved by 0.100 and 0.074. Each
+  parameter now carries its own update count, which matters because 0.5.0
+  made skipping grad-less parameters the normal path (#88).
+- **Optimizer state was indexed by position and never grew**, so adding a
+  parameter through the public `groups_mut()` panicked with an index out of
+  bounds on the next step. State now grows with its group; a parameter with
+  no slot yet simply has no history, which is what `None` already meant (#89).
+- **`serialize::load` was not atomic.** A load that failed partway left the
+  module holding checkpoint values for the parameters it had already visited
+  and original values for the rest — a model from neither source, behind a
+  typed error. It now decodes and validates every parameter before writing
+  any of them (#90).
+- **`serialize::save` panicked inside safetensors** when a `Module` reported
+  two parameters under the same name. `named_parameters` is written by hand
+  in every downstream `Module`, so a duplicate is ordinary caller error and
+  is now a typed `InvalidArgument` naming it (#91).
+- **No published crate carried a licence text.** `LICENSE-MIT` and
+  `LICENSE-APACHE` existed only at the workspace root, so all twelve 0.5.0
+  tarballs shipped the licence *claim* without the licence. Both files now
+  live in every crate, and the release workflow refuses to publish one that
+  would omit them (#92).
+- **Documentation described a release that no longer exists.** README and
+  `docs/LIMITATIONS.md` still named the `ctor` pre-`main` constructor that
+  0.5.0 deleted and restated 0.4.0's "seven crates, 47 → 40" — measured now,
+  three crates leave and it is 43 → 40. `SECURITY.md` still said "Nothing is
+  released yet" for twelve published crates, and the README's optim row named
+  `SGD`/`RMSprop`, which are spelled `Sgd` and `RmsProp` (#93).
+
 ## [0.5.0] — 2026-09-16
 
 The production-hardening milestone (#45–#76): the panics, silent wrong
