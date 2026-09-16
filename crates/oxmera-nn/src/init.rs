@@ -5,6 +5,10 @@ use oxmera_tensor::tensor::Tensor;
 use rand::{Rng, SeedableRng};
 
 fn uniform(shape: Shape, bound: f32, seed: u64) -> Tensor {
+    // A degenerate fan (0) makes the bound infinite and `rand` refuses a
+    // non-finite range by panicking. A layer with no fan has nothing to
+    // spread, so collapse to a zero-width distribution.
+    let bound = if bound.is_finite() { bound } else { 0.0 };
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let numel = shape.numel();
     let data: Vec<f32> = (0..numel)

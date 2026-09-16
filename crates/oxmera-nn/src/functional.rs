@@ -36,6 +36,15 @@ pub fn cat(parts: &[Tensor], dim: usize) -> Result<Tensor> {
 
 /// Zero-pad `dim` by `before`/`after` elements. Differentiable.
 pub fn pad_dim(t: &Tensor, dim: usize, before: usize, after: usize) -> Result<Tensor> {
+    // Checked before the no-op shortcut: an out-of-range dim used to panic
+    // with a raw index-out-of-bounds below, and to be accepted silently when
+    // before == after == 0. Its sibling `cat` has always reported this.
+    if dim >= t.ndim() {
+        return Err(Error::InvalidArgument {
+            op: "pad_dim",
+            detail: format!("dim {dim} out of range for rank {}", t.ndim()),
+        });
+    }
     if before == 0 && after == 0 {
         return Ok(t.clone());
     }

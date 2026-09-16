@@ -48,7 +48,9 @@ use oxmera_tensor::tensor::Tensor;
 ///
 /// # Errors
 ///
-/// [`Error::DTypeMismatch`] naming the layer and the cast to make.
+/// [`Error::InvalidArgument`] naming the layer and the cast to make. (Not
+/// `DTypeMismatch`: that variant carries only the two dtypes, and the point
+/// here is the sentence telling the caller which cast to write.)
 pub fn check_param_dtype(layer: &'static str, input: &Tensor, params: &[Param]) -> Result<()> {
     let Some(first) = params.first() else {
         return Ok(()); // a module with no parameters imposes nothing
