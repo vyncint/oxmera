@@ -22,8 +22,10 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Result<Tensor> {
         b_batch_stride,
         out_shape,
     } = plan;
-    let av = a.to_vec_f32()?;
-    let bv = b.to_vec_f32()?;
+    let mut a_owned = None;
+    let mut b_owned = None;
+    let av = operand_slice(a, &mut a_owned)?;
+    let bv = operand_slice(b, &mut b_owned)?;
     let mut out = vec![0.0f32; batch * m * n];
     if batch == 1 {
         gemm(&av[..m * k], &bv[..k * n], &mut out, m, k, n);
@@ -37,6 +39,19 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Result<Tensor> {
         });
     }
     Tensor::from_vec_f32(out, out_shape)
+}
+
+/// The operand's elements in logical row-major order: borrowed straight
+/// from storage when the tensor is already contiguous (the common case),
+/// and only materialized — copied — when a strided or broadcast view has
+/// to be gathered first. Pre-0.5 every operand was copied unconditionally.
+fn operand_slice<'a>(t: &'a Tensor, owned: &'a mut Option<Vec<f32>>) -> Result<&'a [f32]> {
+    if t.numel() > 0 && t.layout().is_contiguous() {
+        let full = t.storage().cpu()?.f32s()?;
+        let off = t.layout().offset;
+        return Ok(&full[off..off + t.numel()]);
+    }
+    Ok(owned.insert(t.to_vec_f32()?).as_slice())
 }
 
 fn gemm(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: usize, n: usize) {

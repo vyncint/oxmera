@@ -78,3 +78,18 @@ fn argmax_reports_nan_instead_of_hiding_it() {
     let ok = Tensor::from_slice(&[1.0, 3.0, 2.0], [3]).unwrap();
     assert_eq!(ok.argmax(0, false).unwrap().to_vec_i64().unwrap(), vec![1]);
 }
+
+#[test]
+fn matmul_agrees_for_contiguous_and_strided_operands() {
+    // b = [[1,0],[0,1],[1,1]]
+    let b = Tensor::from_slice(&[1.0, 0.0, 0.0, 1.0, 1.0, 1.0], [3, 2]).unwrap();
+    // Contiguous a = [[1,2,3],[4,5,6]] (borrow path).
+    let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3]).unwrap();
+    let want = vec![4.0, 5.0, 10.0, 11.0];
+    assert_eq!(a.matmul(&b).unwrap().to_vec_f32().unwrap(), want);
+    // Same logical a as a non-contiguous view: eᵀ where e = [[1,4],[2,5],[3,6]]
+    // (gather path). Both must give the same product.
+    let e = Tensor::from_slice(&[1.0, 4.0, 2.0, 5.0, 3.0, 6.0], [3, 2]).unwrap();
+    let a_view = e.t().unwrap();
+    assert_eq!(a_view.matmul(&b).unwrap().to_vec_f32().unwrap(), want);
+}
