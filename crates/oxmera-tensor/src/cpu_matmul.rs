@@ -127,10 +127,11 @@ fn gemm_row(arow: &[f32], b: &[f32], crow: &mut [f32], k: usize, n: usize) {
     for kb in (0..k).step_by(K_BLOCK) {
         let kend = (kb + K_BLOCK).min(k);
         for kk in kb..kend {
+            // No `av == 0.0` skip: the 4-row block below multiplies
+            // unconditionally, so skipping here made one call return NaN for
+            // the blocked rows and 0.0 for the remainder rows of the same
+            // data (0 * inf is NaN under IEEE-754). Both paths now agree.
             let av = arow[kk];
-            if av == 0.0 {
-                continue;
-            }
             let brow = &b[kk * n..kk * n + n];
             for (cv, &bv) in crow.iter_mut().zip(brow) {
                 *cv += av * bv;

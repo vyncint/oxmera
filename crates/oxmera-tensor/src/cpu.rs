@@ -357,10 +357,20 @@ impl Backend for CpuBackend {
                 detail: format!("dim {dim} out of range for rank {}", dims.len()),
             });
         }
-        for &i in &idx {
-            if i < 0 || i as usize >= dims[dim] {
+        for (pos, &i) in idx.iter().enumerate() {
+            // A negative index clamped to 0 reported "index [0] out of
+            // bounds" — an index that is perfectly valid — and sent the
+            // caller to the wrong element. IndexOutOfBounds carries
+            // Vec<usize> and cannot hold the value that actually failed.
+            if i < 0 {
+                return Err(Error::InvalidArgument {
+                    op: "index_select",
+                    detail: format!("index {i} at position {pos} is negative"),
+                });
+            }
+            if i as usize >= dims[dim] {
                 return Err(Error::IndexOutOfBounds {
-                    index: vec![i.max(0) as usize],
+                    index: vec![i as usize],
                     shape: a.shape().clone(),
                 });
             }

@@ -78,6 +78,9 @@ impl ReduceOp {
     pub fn combine_f64(self, acc: f64, x: f64) -> f64 {
         match self {
             ReduceOp::Sum => acc + x,
+            // NaN propagates, matching sum; see ReduceOp::combine.
+            ReduceOp::Max if acc.is_nan() || x.is_nan() => f64::NAN,
+            ReduceOp::Min if acc.is_nan() || x.is_nan() => f64::NAN,
             ReduceOp::Max => acc.max(x),
             ReduceOp::Min => acc.min(x),
         }
@@ -285,10 +288,17 @@ pub(crate) fn index_select(a: &Tensor, dim: usize, indices: &Tensor) -> Result<T
             detail: format!("dim {dim} out of range for rank {}", dims.len()),
         });
     }
-    for &i in &idx {
-        if i < 0 || i as usize >= dims[dim] {
+    for (pos, &i) in idx.iter().enumerate() {
+        // See the f32 path: a negative index is reported as negative.
+        if i < 0 {
+            return Err(Error::InvalidArgument {
+                op: "index_select",
+                detail: format!("index {i} at position {pos} is negative"),
+            });
+        }
+        if i as usize >= dims[dim] {
             return Err(Error::IndexOutOfBounds {
-                index: vec![i.max(0) as usize],
+                index: vec![i as usize],
                 shape: a.shape().clone(),
             });
         }

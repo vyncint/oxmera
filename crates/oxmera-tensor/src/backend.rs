@@ -203,6 +203,11 @@ impl ReduceOp {
     pub fn combine(self, acc: f32, x: f32) -> f32 {
         match self {
             ReduceOp::Sum => acc + x,
+            // `f32::max`/`min` return the non-NaN operand, which silently
+            // dropped a NaN that `sum` propagates and `argmax` refuses.
+            // A NaN reaching a reduction is a fault the caller needs to see.
+            ReduceOp::Max if acc.is_nan() || x.is_nan() => f32::NAN,
+            ReduceOp::Min if acc.is_nan() || x.is_nan() => f32::NAN,
             ReduceOp::Max => acc.max(x),
             ReduceOp::Min => acc.min(x),
         }
@@ -249,7 +254,7 @@ pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
             return Err(Error::InvalidArgument {
                 op: "matmul",
                 detail: format!(
-                    "supported ranks are 2 and 3 (batched); got {}x{}",
+                    "needs rank >= 2 on both operands (batched above that); got {}x{}",
                     ad.len(),
                     bd.len()
                 ),
@@ -263,7 +268,7 @@ pub fn plan_matmul(a: &Shape, b: &Shape) -> Result<MatmulPlan> {
             return Err(Error::InvalidArgument {
                 op: "matmul",
                 detail: format!(
-                    "supported ranks are 2 and 3 (batched); got {}x{}",
+                    "needs rank >= 2 on both operands (batched above that); got {}x{}",
                     ad.len(),
                     bd.len()
                 ),
@@ -488,8 +493,10 @@ fn registry() -> &'static Registry {
 
 /// Register a backend for its device, replacing any previous registration.
 ///
-/// Backend crates call this from their load-time constructors; linking a
-/// backend crate is what makes its device usable.
+/// Backend crates expose a `register_default()` that calls this; something
+/// must invoke it — `oxmera_runtime::init()` does for every backend on the
+/// platform. Linking a backend crate does not register it (the pre-`main`
+/// constructor that used to do so was removed in 0.5.0).
 pub fn register_backend(backend: Arc<dyn Backend>) {
     registry()
         .write()

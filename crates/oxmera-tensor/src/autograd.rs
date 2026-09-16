@@ -42,6 +42,41 @@ pub struct AutogradMeta {
     pub(crate) grad_fn: Option<GradFn>,
 }
 
+impl Drop for AutogradMeta {
+    /// Take the tape apart iteratively.
+    ///
+    /// A tape is a linked structure — each node owns the input tensors it
+    /// consumed, and each of those owns its own node — so the derived drop
+    /// recurses once per operation and overflows the stack on a deep graph
+    /// (an unrolled RNN, or any long chain built before `backward`). At
+    /// roughly 65k nodes that aborted the process, which no caller can
+    /// catch. This walks the graph with an explicit worklist instead, so
+    /// depth costs heap rather than stack.
+    fn drop(&mut self) {
+        let mut stack: Vec<Tensor> = Vec::new();
+        let shed = |meta: &mut AutogradMeta, stack: &mut Vec<Tensor>| {
+            if let Some(gf) = meta.grad_fn.take() {
+                stack.extend(gf.inputs);
+            }
+            if let Ok(slot) = meta.grad.get_mut()
+                && let Some(g) = slot.take()
+            {
+                stack.push(g);
+            }
+        };
+        shed(self, &mut stack);
+        while let Some(mut tensor) = stack.pop() {
+            // Only descend where this was the last handle: a node still
+            // shared with a live tensor must stay intact.
+            if let Some(node) = tensor.take_autograd()
+                && let Some(mut owned) = Arc::into_inner(node)
+            {
+                shed(&mut owned, &mut stack);
+            }
+        }
+    }
+}
+
 thread_local! {
     static RECORDING: Cell<bool> = const { Cell::new(true) };
 }

@@ -50,8 +50,14 @@ fn dispatch_cpu_fallback<T>(
 
 impl Tensor {
     /// The `n × n` identity matrix on the CPU.
+    /// # Panics
+    /// Panics if `n * n` overflows `usize`. Unchecked, this wrapped to a
+    /// short allocation and surfaced as an index-out-of-bounds below.
     pub fn eye(n: usize) -> Tensor {
-        let mut v = vec![0.0f32; n * n];
+        let cells = n
+            .checked_mul(n)
+            .expect("eye: n * n overflows usize — the identity is too large to build");
+        let mut v = vec![0.0f32; cells];
         for i in 0..n {
             v[i * n + i] = 1.0;
         }
@@ -95,7 +101,15 @@ impl Tensor {
     /// The trace of every matrix in a `[.., n, n]` tensor, as `[..]`.
     /// Differentiable.
     pub fn trace(&self) -> Result<Tensor> {
-        let diag = self.diag()?;
+        // Report `trace`: the caller never wrote `diag`, and an error naming
+        // it sends them looking for a call that does not exist.
+        let diag = self.diag().map_err(|e| match e {
+            Error::InvalidArgument { detail, .. } => Error::InvalidArgument {
+                op: "trace",
+                detail,
+            },
+            other => other,
+        })?;
         diag.sum(&[diag.ndim() - 1])
     }
 
@@ -104,8 +118,24 @@ impl Tensor {
     ///
     /// Reads the lower triangle. A matrix that is not positive definite
     /// is a typed [`Error::InvalidArgument`] naming the batch index and
-    /// pivot. Differentiable (Murray 2016); the backward pass runs on the
-    /// host in `f64` and returns to the input's device.
+    /// pivot. The backward pass runs on the host and returns to the input's
+    /// device; its intermediates are `f64`, but it takes its inputs as
+    /// `f32`, so an `f64` gradient carries `f32` precision.
+    ///
+    /// # Gradient convention
+    ///
+    /// The gradient (Murray 2016) is taken with respect to **symmetric
+    /// perturbations** of the input: `d logdet/dA = A⁻¹`, which is the
+    /// standard result and what PyTorch returns. Because the forward reads
+    /// only the lower triangle, an *elementwise* finite difference — which
+    /// perturbs one entry and so breaks symmetry — does not agree with it,
+    /// and `oxmera_autograd::gradcheck` cannot be used on `cholesky`,
+    /// `logdet` or `det` directly. Check them through a symmetrizer
+    /// (`(X + Xᵀ)/2`), as `tests/gradcheck.rs` does, or against `A⁻¹`.
+    ///
+    /// The practical consequence: feed these ops a symmetric matrix. Given
+    /// an asymmetric one the forward silently uses the lower triangle while
+    /// the gradient describes a symmetric matrix, and the two disagree.
     pub fn cholesky(&self) -> Result<Tensor> {
         square_matrix_dims(self, "cholesky")?;
         let out = dispatch_cpu_fallback(self, |be, t| be.cholesky(t), |be, l| be.upload(&l))?;
