@@ -8,7 +8,7 @@ use oxmera_tensor::tensor::Tensor;
 use safetensors::tensor::TensorView;
 use safetensors::{Dtype, SafeTensors};
 
-use crate::Module;
+use crate::{Module, Param};
 
 fn io_err(op: &'static str) -> impl Fn(std::io::Error) -> Error {
     move |e| Error::Io {
@@ -20,7 +20,17 @@ fn io_err(op: &'static str) -> impl Fn(std::io::Error) -> Error {
 /// Save a module's named parameters to `path` in safetensors format.
 pub fn save(module: &dyn Module, path: impl AsRef<Path>) -> Result<()> {
     let mut buffers: Vec<(String, Vec<usize>, Vec<u8>)> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (name, param) in module.named_parameters("") {
+        // safetensors indexes by name and panics on a repeat; `named_parameters`
+        // is hand-written by every downstream Module, so a duplicate is ordinary
+        // caller error and belongs in the error taxonomy.
+        if !seen.insert(name.clone()) {
+            return Err(Error::InvalidArgument {
+                op: "safetensors::save",
+                detail: format!("duplicate parameter name {name:?}"),
+            });
+        }
         let value = param.value().to_device(Device::Cpu)?;
         let dims = value.dims().to_vec();
         let data = value.to_vec_f32()?;
@@ -60,6 +70,10 @@ pub fn load(module: &dyn Module, path: impl AsRef<Path>) -> Result<()> {
     })?;
     let by_name: HashMap<String, TensorView<'_>> = tensors.tensors().into_iter().collect();
 
+    // Two passes: decode and validate every parameter first, then commit.
+    // Writing as we walked left a failed load half-applied — the parameters
+    // already visited held checkpoint values and the rest held their own.
+    let mut staged: Vec<(Param, Tensor)> = Vec::new();
     for (name, param) in module.named_parameters("") {
         let view = by_name.get(&name).ok_or_else(|| Error::Io {
             op: "safetensors::load",
@@ -82,10 +96,13 @@ pub fn load(module: &dyn Module, path: impl AsRef<Path>) -> Result<()> {
         }
         let (chunks, _rest) = view.data().as_chunks::<4>();
         let data: Vec<f32> = chunks.iter().map(|c| f32::from_le_bytes(*c)).collect();
-        param.set(Tensor::from_vec_f32(
-            data,
-            Shape::new(view.shape().to_vec()),
-        )?);
+        staged.push((
+            param,
+            Tensor::from_vec_f32(data, Shape::new(view.shape().to_vec()))?,
+        ));
+    }
+    for (param, value) in staged {
+        param.set(value);
     }
     Ok(())
 }
