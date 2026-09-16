@@ -1,0 +1,26 @@
+# A fresh security advisory filed against a dependency we already ship is
+# not caught by push/PR CI, which runs only when the tree changes. This
+# runs the advisory database against the committed lockfile on a schedule,
+# so a new CVE surfaces as a failed run within the week rather than at the
+# next unrelated push. Bans/licenses/sources stay on the push/PR firewall
+# in ci.yml; this leg is advisories only.
+name: advisories
+
+on:
+  schedule:
+    - cron: "23 6 * * 2" # weekly, Tuesday 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    name: security advisories (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          command: check advisories

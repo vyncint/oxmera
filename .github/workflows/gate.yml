@@ -22,10 +22,17 @@ on:
 permissions:
   contents: read
 
+# One gate run per ref: a new push supersedes an in-flight run rather than
+# letting both burn a runner installing a rustc-driver from source.
+concurrency:
+  group: gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   reconverge-strict:
     name: reconverge strict (cuda kernels)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Pinned nightly with driver components
@@ -46,6 +53,7 @@ jobs:
   prune:
     name: launchbound prune (cc ${{ matrix.cc }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         cc: ["7.5", "8.6"]

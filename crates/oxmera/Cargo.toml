@@ -8,6 +8,8 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 # Forwarded to oxmera-runtime, which owns the registration. On by default.
