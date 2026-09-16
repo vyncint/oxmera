@@ -26,6 +26,8 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vyncint/oxmera"
 authors = ["Vyncint Ng <vyncint@icloud.com>"]
+keywords = ["tensor", "deep-learning", "machine-learning", "autograd", "gpu"]
+categories = ["science", "mathematics", "algorithms"]
 
 [workspace.dependencies]
 thiserror = "2"

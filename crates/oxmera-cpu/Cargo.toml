@@ -8,6 +8,8 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 oxmera-core.workspace = true
