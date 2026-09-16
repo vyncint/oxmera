@@ -176,3 +176,99 @@ fn maximum_and_minimum_split_a_tie_evenly() {
     r.relu().unwrap().sum(&[]).unwrap().backward().unwrap();
     assert_eq!(r.grad().unwrap().to_vec_f32().unwrap(), vec![0.0, 1.0, 0.0]);
 }
+
+// ---- 0.5.2: defects found by deep-testing the published 0.5.1 ----
+
+#[test]
+fn a_deep_tape_drops_without_aborting() {
+    // The derived drop recursed once per node and aborted the process at
+    // ~20k nodes in debug. An abort cannot be caught, so if this regresses
+    // it takes the whole test binary with it — which is the point.
+    let mut t = Tensor::from_slice(&[1.0], [1])
+        .unwrap()
+        .requires_grad_(true);
+    for _ in 0..50_000 {
+        t = t.mul_scalar(1.000_000_1).unwrap();
+    }
+    drop(t);
+}
+
+#[test]
+fn matmul_is_consistent_across_its_row_paths() {
+    // 5 rows = one 4-row block plus a 1-row remainder, which took different
+    // code paths: the remainder skipped the multiply when a was 0.0, so one
+    // call returned NaN for some rows and 0.0 for others of the same data.
+    let a = Tensor::from_vec_f32(vec![0.0; 5 * 4], [5, 4]).unwrap();
+    let b = Tensor::from_vec_f32(vec![f32::INFINITY; 4 * 2], [4, 2]).unwrap();
+    let out = a.matmul(&b).unwrap().to_vec_f32().unwrap();
+    assert!(
+        out.iter().all(|v| v.is_nan()),
+        "0 * inf must agree on every row: {out:?}"
+    );
+}
+
+#[test]
+fn max_and_min_propagate_nan_like_sum() {
+    let t = Tensor::from_slice(&[1.0, f32::NAN, 2.0], [3]).unwrap();
+    assert!(
+        t.max(&[0]).unwrap().to_vec_f32().unwrap()[0].is_nan(),
+        "max must not drop NaN"
+    );
+    assert!(
+        t.min(&[0]).unwrap().to_vec_f32().unwrap()[0].is_nan(),
+        "min must not drop NaN"
+    );
+    assert!(t.sum(&[0]).unwrap().to_vec_f32().unwrap()[0].is_nan());
+    // A clean input is unaffected.
+    let c = Tensor::from_slice(&[1.0, 3.0, 2.0], [3]).unwrap();
+    assert_eq!(c.max(&[0]).unwrap().to_vec_f32().unwrap(), vec![3.0]);
+    assert_eq!(c.min(&[0]).unwrap().to_vec_f32().unwrap(), vec![1.0]);
+}
+
+#[test]
+fn degenerate_inputs_are_typed_errors_not_panics() {
+    // `try_` must never abort: vec![v; n] aborts when the allocator refuses.
+    assert!(Tensor::try_zeros([1usize << 45]).is_err());
+    assert!(Tensor::try_ones([1usize << 45]).is_err());
+    assert!(Tensor::try_full([1usize << 45], 1.0).is_err());
+    // A reversed range is a caller mistake, not an empty selection.
+    // (Built from bindings so clippy does not fold the literal range away.)
+    let (start, end) = (4usize, 2usize);
+    let e = Tensor::zeros([5usize]).slice(0, start..end).unwrap_err();
+    assert!(e.to_string().contains("reversed"), "{e}");
+    assert_eq!(Tensor::zeros([5usize]).slice(0, 1..3).unwrap().dims(), &[2]);
+}
+
+#[test]
+#[should_panic(expected = "overflows usize")]
+fn eye_refuses_a_size_whose_square_overflows() {
+    let _ = Tensor::eye(1usize << 33);
+}
+
+#[test]
+fn errors_name_the_op_the_caller_called() {
+    // trace() used to report an error naming `diag`, which the caller never wrote.
+    let e = Tensor::zeros([2usize, 3]).trace().unwrap_err().to_string();
+    assert!(e.contains("trace"), "{e}");
+    assert!(!e.contains("diag"), "{e}");
+    // A negative index is reported as negative, not as index 0.
+    let idx = Tensor::from_vec_i64(vec![-1], [1]).unwrap();
+    let e = Tensor::zeros([3usize])
+        .index_select(0, &idx)
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("-1"), "{e}");
+    // The rank message must not name a limit matmul does not have.
+    let e = Tensor::zeros([2usize])
+        .matmul(&Tensor::zeros([2usize]))
+        .unwrap_err()
+        .to_string();
+    assert!(!e.contains("2 and 3"), "rank-4/5 matmul works: {e}");
+    assert_eq!(
+        Tensor::zeros([2usize, 2, 2, 2, 2])
+            .matmul(&Tensor::zeros([2usize, 2, 2, 2, 2]))
+            .unwrap()
+            .dims(),
+        &[2, 2, 2, 2, 2]
+    );
+}

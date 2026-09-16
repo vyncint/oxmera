@@ -149,7 +149,7 @@ impl Tensor {
     pub fn try_zeros(shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
         let numel = checked_numel(&shape, "Tensor::try_zeros")?;
-        Self::from_vec_f32(vec![0.0; numel], shape)
+        Self::from_vec_f32(try_filled(numel, 0.0, "Tensor::try_zeros")?, shape)
     }
 
     /// A CPU tensor of ones.
@@ -166,7 +166,7 @@ impl Tensor {
     pub fn try_ones(shape: impl Into<Shape>) -> Result<Self> {
         let shape = shape.into();
         let numel = checked_numel(&shape, "Tensor::try_ones")?;
-        Self::from_vec_f32(vec![1.0; numel], shape)
+        Self::from_vec_f32(try_filled(numel, 1.0, "Tensor::try_ones")?, shape)
     }
 
     /// A CPU tensor filled with `value`.
@@ -183,7 +183,7 @@ impl Tensor {
     pub fn try_full(shape: impl Into<Shape>, value: f32) -> Result<Self> {
         let shape = shape.into();
         let numel = checked_numel(&shape, "Tensor::try_full")?;
-        Self::from_vec_f32(vec![value; numel], shape)
+        Self::from_vec_f32(try_filled(numel, value, "Tensor::try_full")?, shape)
     }
 
     /// A rank-0 scalar tensor.
@@ -415,8 +415,15 @@ impl Tensor {
 
     /// A view of `range` along `dim` — sugar over [`Tensor::narrow`].
     pub fn slice(&self, dim: usize, range: std::ops::Range<usize>) -> Result<Self> {
-        let len = range.end.saturating_sub(range.start);
-        self.narrow(dim, range.start, len)
+        if range.end < range.start {
+            // Saturating to an empty view turned a caller mistake into a
+            // silently empty tensor that fails much later.
+            return Err(Error::InvalidArgument {
+                op: "slice",
+                detail: format!("range {}..{} is reversed", range.start, range.end),
+            });
+        }
+        self.narrow(dim, range.start, range.end - range.start)
     }
 
     /// A zero-copy broadcast view to `shape` (stride 0 on expanded axes).
@@ -619,6 +626,13 @@ impl Tensor {
     }
 
     /// Attach a tape node to this tensor (used by the op layer).
+    /// Detach this tensor's tape node and hand it back, leaving the tensor a
+    /// leaf. `AutogradMeta::drop` uses this to dismantle a deep tape
+    /// iteratively rather than recursing once per node.
+    pub(crate) fn take_autograd(&mut self) -> Option<Arc<AutogradMeta>> {
+        self.autograd.take()
+    }
+
     pub(crate) fn with_grad_fn(mut self, grad_fn: GradFn) -> Self {
         self.autograd = Some(Arc::new(AutogradMeta {
             requires_grad: false,
@@ -786,6 +800,21 @@ pub(crate) fn gather_logical<T: Copy>(src: &[T], layout: &Layout) -> Vec<T> {
 
 /// The element count of a caller-supplied shape, or a typed error when it
 /// does not fit in `usize` (see [`Shape::checked_numel`]).
+/// `numel` copies of `value`, reporting an allocation failure as a typed
+/// error. `vec![value; numel]` *aborts the process* when the allocator
+/// refuses, which a `try_` constructor must never do — that is the whole
+/// reason the caller reached for the fallible form.
+fn try_filled(numel: usize, value: f32, op: &'static str) -> Result<Vec<f32>> {
+    let mut data: Vec<f32> = Vec::new();
+    data.try_reserve_exact(numel)
+        .map_err(|_| Error::InvalidArgument {
+            op,
+            detail: format!("cannot allocate {numel} f32 elements"),
+        })?;
+    data.resize(numel, value);
+    Ok(data)
+}
+
 fn checked_numel(shape: &Shape, op: &'static str) -> Result<usize> {
     shape.checked_numel().ok_or_else(|| Error::InvalidArgument {
         op,
