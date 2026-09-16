@@ -73,6 +73,21 @@ fn state_slots(groups: &[ParamGroup]) -> Vec<Vec<Option<Tensor>>> {
     groups.iter().map(|g| vec![None; g.params.len()]).collect()
 }
 
+/// Grow per-parameter state to match the groups as they are now.
+///
+/// `ParamGroup::params` is public and reachable through `groups_mut()`, so a
+/// caller may legitimately add a parameter between steps. State is keyed by
+/// position, and indexing it blindly panicked; a parameter with no slot yet
+/// simply has no history, which is already what `None` means.
+fn fit_slots<T: Default + Clone>(slots: &mut Vec<Vec<T>>, groups: &[ParamGroup]) {
+    slots.resize_with(groups.len(), Vec::new);
+    for (slot, group) in slots.iter_mut().zip(groups) {
+        if slot.len() < group.params.len() {
+            slot.resize_with(group.params.len(), T::default);
+        }
+    }
+}
+
 /// Stochastic gradient descent with optional momentum and (coupled L2)
 /// weight decay, per group.
 pub struct Sgd {
@@ -111,6 +126,7 @@ impl Sgd {
 
 impl Optimizer for Sgd {
     fn step(&mut self) -> Result<()> {
+        fit_slots(&mut self.velocity, &self.groups);
         no_grad(|| {
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {
@@ -152,7 +168,10 @@ struct AdamCore {
     beta2: f32,
     eps: f32,
     decoupled: bool,
-    step: i32,
+    /// Per-parameter update count, for bias correction. A single global
+    /// counter mis-scaled the first update of any parameter whose gradient
+    /// arrived late — which skipping grad-less parameters makes routine.
+    steps: Vec<Vec<i32>>,
     m: Vec<Vec<Option<Tensor>>>,
     v: Vec<Vec<Option<Tensor>>>,
 }
@@ -161,28 +180,35 @@ impl AdamCore {
     fn new(groups: Vec<ParamGroup>, decoupled: bool) -> Self {
         let m = state_slots(&groups);
         let v = state_slots(&groups);
+        let steps = groups.iter().map(|g| vec![0i32; g.params.len()]).collect();
         Self {
             groups,
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
             decoupled,
-            step: 0,
+            steps,
             m,
             v,
         }
     }
 
     fn step(&mut self) -> Result<()> {
+        fit_slots(&mut self.m, &self.groups);
+        fit_slots(&mut self.v, &self.groups);
+        fit_slots(&mut self.steps, &self.groups);
         no_grad(|| {
-            self.step += 1;
-            let bc1 = 1.0 - self.beta1.powi(self.step);
-            let bc2 = 1.0 - self.beta2.powi(self.step);
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {
                     let Some(mut grad) = param.grad() else {
                         continue;
                     };
+                    // This parameter's own update count, so a late arrival is
+                    // bias-corrected as the first step it actually is.
+                    self.steps[gi][i] += 1;
+                    let t = self.steps[gi][i];
+                    let bc1 = 1.0 - self.beta1.powi(t);
+                    let bc2 = 1.0 - self.beta2.powi(t);
                     let mut value = param.value().detach();
                     // A GPU backend fuses the whole update into one launch;
                     // the composite path below is the reference it must match.
@@ -394,6 +420,7 @@ impl RmsProp {
 
 impl Optimizer for RmsProp {
     fn step(&mut self) -> Result<()> {
+        fit_slots(&mut self.sq, &self.groups);
         no_grad(|| {
             for (gi, group) in self.groups.iter().enumerate() {
                 for (i, param) in group.params.iter().enumerate() {

@@ -203,3 +203,47 @@ fn optimizer_hyperparameter_builders_apply() {
     rms.step().unwrap();
     assert_ne!(q.value().to_vec_f32().unwrap(), vec![1.0]);
 }
+
+#[test]
+fn adam_bias_correction_is_per_parameter() {
+    // Two parameters, identical first gradients, but one arrives a step
+    // late. A single global step counter mis-scaled the latecomer.
+    let early = leaf(&[1.0]);
+    let late = leaf(&[1.0]);
+    let mut opt = Adam::new(vec![early.clone(), late.clone()], 0.1);
+
+    backward_ones(std::slice::from_ref(&early));
+    opt.step().unwrap();
+    opt.zero_grad();
+
+    backward_ones(std::slice::from_ref(&late));
+    opt.step().unwrap();
+
+    let d_early = 1.0 - early.value().to_vec_f32().unwrap()[0];
+    let d_late = 1.0 - late.value().to_vec_f32().unwrap()[0];
+    assert!(
+        (d_early - d_late).abs() < 1e-6,
+        "identical first gradients must give identical first updates: {d_early} vs {d_late}"
+    );
+}
+
+#[test]
+fn a_parameter_added_through_groups_mut_is_adopted() {
+    let a = leaf(&[1.0]);
+    let mut opt = Sgd::with_config(vec![a.clone()], 0.1, 0.9, 0.0);
+    backward_ones(std::slice::from_ref(&a));
+    opt.step().unwrap();
+    opt.zero_grad();
+
+    // `groups_mut()` is public and `ParamGroup::params` is a public Vec;
+    // adding to it used to panic the next step with an index out of bounds.
+    let b = leaf(&[5.0]);
+    opt.groups_mut()[0].params.push(b.clone());
+    backward_ones(&[a.clone(), b.clone()]);
+    opt.step().unwrap();
+    assert_ne!(
+        b.value().to_vec_f32().unwrap(),
+        vec![5.0],
+        "the added parameter must be updated"
+    );
+}
