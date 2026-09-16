@@ -382,3 +382,25 @@ fn module_to_device_cpu_is_a_noop_and_stays_trainable() {
         .unwrap();
     assert!(layer.weight().grad().is_some());
 }
+
+#[test]
+fn bce_with_logits_gradient_is_exact_at_a_zero_logit() {
+    // The loss is smooth at x = 0; only its max(x,0) decomposition has a
+    // kink. Before 0.5.1 the tie sent the whole gradient to the constant
+    // zero, giving -t instead of sigmoid(0) - t, and descent moved uphill.
+    let logits = Tensor::from_slice(&[0.0, 0.0, 0.0, 0.0], [4])
+        .unwrap()
+        .requires_grad_(true);
+    let target = Tensor::from_slice(&[1.0, 1.0, 0.0, 0.0], [4]).unwrap();
+    BCEWithLogitsLoss
+        .forward(&logits, &target)
+        .unwrap()
+        .backward()
+        .unwrap();
+    assert_close(
+        &logits.grad().unwrap().to_vec_f32().unwrap(),
+        &[-0.125, -0.125, 0.125, 0.125],
+        1e-6,
+        "(sigmoid(0) - t) / n",
+    );
+}

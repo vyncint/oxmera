@@ -47,8 +47,15 @@ impl Tensor {
     ///
     /// Errors when the layout addresses elements outside the storage.
     pub fn from_storage(storage: Arc<Storage>, layout: Layout) -> Result<Self> {
-        let (lo, hi) = addressed_bounds(&layout);
         let available = storage_len(&storage) as isize;
+        let Some((lo, hi)) = addressed_bounds(&layout) else {
+            return Err(Error::InvalidArgument {
+                op: "Tensor::from_storage",
+                detail: "layout extents overflow the address space, so it cannot be proven \
+                         in bounds"
+                    .into(),
+            });
+        };
         if lo < 0 || hi > available {
             return Err(Error::InvalidArgument {
                 op: "Tensor::from_storage",
@@ -661,23 +668,24 @@ fn storage_len(storage: &Storage) -> usize {
 /// `max_exclusive <= storage length`; the pre-0.5 check accounted for
 /// positive strides only and let an underflowing negative-stride layout
 /// through to a panic on the first read.
-fn addressed_bounds(layout: &Layout) -> (isize, isize) {
-    if layout.shape.numel() == 0 {
-        return (0, 0);
+fn addressed_bounds(layout: &Layout) -> Option<(isize, isize)> {
+    if layout.shape.checked_numel()? == 0 {
+        return Some((0, 0));
     }
-    let mut lo = layout.offset as isize;
-    let mut hi = layout.offset as isize;
+    let base = isize::try_from(layout.offset).ok()?;
+    let mut lo = base;
+    let mut hi = base;
     for (&d, &s) in layout.shape.dims().iter().zip(layout.strides.values()) {
         if d > 1 {
-            let span = (d as isize - 1) * s;
+            let span = isize::try_from(d - 1).ok()?.checked_mul(s)?;
             if s >= 0 {
-                hi += span;
+                hi = hi.checked_add(span)?;
             } else {
-                lo += span;
+                lo = lo.checked_add(span)?;
             }
         }
     }
-    (lo, hi + 1)
+    Some((lo, hi.checked_add(1)?))
 }
 
 /// Broadcast `layout` to `target`, stride 0 on expanded axes.
