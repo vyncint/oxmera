@@ -16,3 +16,7 @@ oxmera-core.workspace = true
 oxmera-tensor.workspace = true
 rand = "0.9"
 safetensors = "0.6"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

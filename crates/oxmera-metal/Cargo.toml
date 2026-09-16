@@ -21,3 +21,10 @@ metal = "0.33.0"
 [dev-dependencies]
 oxmera-nn.workspace = true
 oxmera-optim.workspace = true
+
+[package.metadata.docs.rs]
+# Built on Linux by default, where this crate is an empty stub — so docs.rs
+# showed a one-function page and `oxmera::metal` led nowhere.
+default-target = "aarch64-apple-darwin"
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

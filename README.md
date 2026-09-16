@@ -34,7 +34,7 @@ let logits = model.forward(&x)?;
 
 | area | what you get |
 |---|---|
-| tensors | `f32` (and CPU `f64`) strided views (`reshape`/`permute`/`narrow`/`broadcast_to` are zero-copy), NumPy broadcasting, batched matmul, operator overloading (`&a + &b`, `a * 2.0`) |
+| tensors | `f32` (and CPU `f64`) strided views (`permute`/`narrow`/`broadcast_to` are zero-copy; `reshape` is too when the input is contiguous, and copies otherwise), NumPy broadcasting, batched matmul, operator overloading (`&a + &b`, `a * 2.0`) |
 | devices | CPU (rayon-parallel, cache-tiled GEMM), Apple Metal (MSL compute kernels, threadgroup reductions, tiled GEMM over unified memory) and NVIDIA CUDA (the same kernels in CUDA C, shipped as PTX and driven through the driver API — no CUDA toolkit needed to build, `libcuda` found at runtime); `tensor.to_device(...)` moves data, autograd flows across the move |
 | autograd | tape-based reverse mode: `requires_grad`, `backward()`, gradient accumulation, `no_grad` RAII guard — every VJP validated by finite differences in CI |
 | nn | `Linear`, `Conv2d`, `Embedding`, `LayerNorm`, `BatchNorm2d`, `Dropout`, `Sequential`; `MSELoss`, `CrossEntropyLoss`, `BCEWithLogitsLoss`; Kaiming/Xavier initializers |

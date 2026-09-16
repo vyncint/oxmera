@@ -14,3 +14,7 @@ categories.workspace = true
 [dependencies]
 oxmera-core.workspace = true
 oxmera-tensor.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
