@@ -21,6 +21,7 @@ oxmera.workspace = true
 crossterm = "0.29"
 ratatui = "0.30.0"
 serde.workspace = true
+serde_json = "1"
 toml.workspace = true
 
 # Already in the tree via crossterm <- ratatui, at this version. Naming it

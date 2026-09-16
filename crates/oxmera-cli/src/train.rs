@@ -89,7 +89,13 @@ fn parse(args: &[String]) -> Result<Args, String> {
     Ok(out)
 }
 
+const USAGE: &str = "usage: oxmera train [--device cpu|metal|cuda] [--epochs N] [--seed N] [--tui] [--replay <path>]";
+
 pub fn run(args: &[String]) -> Result<(), String> {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("{USAGE}");
+        return Ok(());
+    }
     let args = parse(args)?;
 
     if let Some(path) = &args.replay {

@@ -7,7 +7,9 @@
 //!   by frame with no clocks and no randomness — the mode the termlens
 //!   goldens capture.
 
-use crossterm::event::{self, Event, KeyCode};
+use std::io::IsTerminal;
+
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -64,6 +66,9 @@ pub struct Dashboard {
 
 /// Enter the alternate screen and draw the initial (empty) dashboard.
 pub fn start(state: DashState) -> Result<Dashboard, String> {
+    if !std::io::stdout().is_terminal() {
+        return Err("the live dashboard needs a terminal on stdout; run without --tui".into());
+    }
     // Before the terminal is borrowed, so the guard is in place for every
     // instant it is borrowed. `ratatui::init()` installs the panic hook;
     // this covers the exit it does not (#40).
@@ -122,6 +127,9 @@ impl Dashboard {
 /// Render a recorded run: every epoch frame in order, no clocks, then the
 /// completed frame until `q`.
 pub fn run_replay(replay: &Replay) -> Result<(), String> {
+    if !std::io::stdout().is_terminal() {
+        return Err("rendering a replay needs a terminal on stdout".into());
+    }
     let mut state = DashState::new(
         &replay.device,
         &replay.model,
@@ -168,7 +176,9 @@ fn wait_for_quit(terminal: &mut DefaultTerminal, state: &DashState) -> Result<()
 fn is_quit(ev: &Event) -> bool {
     matches!(
         ev,
-        Event::Key(k) if k.code == KeyCode::Char('q') || k.code == KeyCode::Esc
+        Event::Key(k) if k.code == KeyCode::Char('q')
+            || k.code == KeyCode::Esc
+            || (k.code == KeyCode::Char('c') && k.modifiers.contains(KeyModifiers::CONTROL))
     )
 }
 

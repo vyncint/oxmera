@@ -5,17 +5,37 @@
 use crate::probe;
 use crate::report::Report;
 
+const USAGE: &str = "usage: oxmera doctor [--fixture <path>] [--json]";
+
 pub fn run(args: &[String]) -> Result<(), String> {
-    let report = match args {
-        [] => probe::probe(),
-        [flag, path] if flag == "--fixture" => {
+    let mut fixture: Option<&String> = None;
+    let mut json = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--help" | "-h" => {
+                println!("{USAGE}");
+                return Ok(());
+            }
+            "--json" => json = true,
+            "--fixture" => fixture = Some(it.next().ok_or("--fixture expects a path")?),
+            other => return Err(format!("unknown doctor argument {other}\n{USAGE}")),
+        }
+    }
+    let report = match fixture {
+        Some(path) => {
             let text = std::fs::read_to_string(path)
                 .map_err(|e| format!("cannot read fixture {path}: {e}"))?;
             toml::from_str(&text).map_err(|e| format!("cannot parse fixture {path}: {e}"))?
         }
-        _ => return Err("usage: oxmera doctor [--fixture <path>]".into()),
+        None => probe::probe(),
     };
-    print!("{}", render(&report));
+    if json {
+        let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+        println!("{json}");
+    } else {
+        print!("{}", render(&report));
+    }
     Ok(())
 }
 

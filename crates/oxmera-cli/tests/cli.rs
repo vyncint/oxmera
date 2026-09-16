@@ -142,3 +142,41 @@ fn doctor_names_every_family_this_release_ships() {
         );
     }
 }
+
+#[test]
+fn subcommand_help_is_stdout_and_exit_zero() {
+    for sub in ["doctor", "train"] {
+        let (code, stdout, stderr) = run(&[sub, "--help"]);
+        assert_eq!(code, 0, "{sub} --help: exit code (was 1 before #58)");
+        assert!(
+            stdout.starts_with("usage: oxmera"),
+            "{sub} --help: stdout {stdout:?}"
+        );
+        assert!(stderr.is_empty(), "{sub} --help: stderr {stderr:?}");
+    }
+}
+
+#[test]
+fn doctor_json_is_machine_readable() {
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/no-gpu.toml");
+    let (code, stdout, stderr) =
+        run(&["doctor", "--fixture", &fixture.to_string_lossy(), "--json"]);
+    assert_eq!(code, 0, "doctor --json failed: {stderr}");
+    let v: serde_json::Value =
+        serde_json::from_str(&stdout).expect("doctor --json emits valid JSON");
+    assert!(v["os"].is_string(), "{stdout}");
+    assert!(v["devices"].is_object(), "{stdout}");
+    assert!(v["toolchain"].is_object(), "{stdout}");
+}
+
+#[test]
+fn train_tui_without_a_terminal_fails_cleanly_not_a_panic() {
+    // stdout is a pipe here, not a tty: the dashboard must refuse with a
+    // usage-style error and a non-zero, non-101 exit — never a panic.
+    let (code, stdout, stderr) = run(&["train", "--tui", "--epochs", "1"]);
+    assert_ne!(code, 0, "should fail without a terminal");
+    assert_ne!(code, 101, "must not panic: {stderr}");
+    assert!(stdout.is_empty(), "stdout {stdout:?}");
+    assert!(stderr.contains("terminal"), "stderr {stderr:?}");
+}
