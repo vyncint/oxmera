@@ -28,4 +28,3 @@ mod backend;
 pub use backend::{
     CudaBackend, device_summary, is_driver_present, register_default, source_fingerprint,
 };
-

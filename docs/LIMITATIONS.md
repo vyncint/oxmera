@@ -110,9 +110,14 @@ numbers come from re-runnable commands.
   O(index count) per element; it is meant for the narrow VJP, `cat`/`pad`
   and embedding-sized index lists, not for scattering millions of rows.
 - Backend registration is process-global and idempotent: a device that has
-  a backend keeps it (a backend now carries dispatch state). Metal and
-  CUDA register at load time; if a linker strips the registration (unusual
-  link setups), call `oxmera::init()` explicitly.
+  a backend keeps it (a backend now carries dispatch state). The CPU
+  registers on first use; Metal and CUDA are registered explicitly by
+  `oxmera::init()`, which the CLI and examples call — as of 0.5 there is no
+  pre-main constructor.
+- Only device index 0 is registered. `Device::Metal { index }` or
+  `Device::Cuda { index }` with `index > 0` resolves to a typed
+  `BackendUnavailable` error rather than a silent fallback; multi-GPU is
+  not yet supported.
 - `Dropout` masks are generated on the CPU per forward pass.
 
 ## Terminal surfaces

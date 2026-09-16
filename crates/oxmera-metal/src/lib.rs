@@ -23,4 +23,3 @@ pub use backend::{MetalBackend, device_summary, register_default};
 /// cfg of their own.
 #[cfg(not(target_os = "macos"))]
 pub fn register_default() {}
-

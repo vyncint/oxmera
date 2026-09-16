@@ -5,9 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-09-16
+
+The production-hardening milestone (#45–#76): the panics, silent wrong
+answers and untyped failures a downstream consumer could still hit became
+typed errors, the public API was locked down against accidental breakage,
+and the release pipeline gained the checks that keep a bad build from
+shipping. Breaking changes are collected below with their one-line
+migrations; the new `semver-checks` job enforces that a future break
+cannot land in a patch.
+
+### Added
+
+- **Fallible tensor constructors** `Tensor::try_zeros`, `try_ones` and
+  `try_full`, returning a typed error when a shape's element count
+  overflows `usize`. The infallible `zeros`/`ones`/`full` remain and now
+  document that they panic on such a shape (#51).
+- **`Module::to_device`**, backed by `Param::to_device`, moves a model's
+  parameters to a device once. Layers read their parameters each forward,
+  so the per-forward transfer becomes a no-op afterwards and the
+  device-resident fused Adam step — until now unreachable, because
+  parameters never left the CPU — finally runs (#46).
+- **`Sequential` inspection**: `iter`, `get` and `Index<usize>` over its
+  children, and a `Debug` that shows them (#61).
+- **Optimizer and layer hyperparameters**: `Adam`/`AdamW::with_betas` and
+  `with_eps`, `RmsProp::with_alpha` and `with_eps`, `LayerNorm::with_eps`,
+  and `BatchNorm2d::with_eps`/`with_momentum`. Defaults are unchanged (#54).
+- **`oxmera doctor --json`** for scripts, and `--help` on both `doctor`
+  and `train`, which used to be rejected as an unknown argument (#58).
+- **`docs/STABILITY.md`**: the SemVer, MSRV and `#[non_exhaustive]`
+  contract and the road to 1.0 (#45).
+- crates.io **keywords and categories** on every crate; a **`semver-checks`
+  CI job** against the last release; and a **weekly advisory workflow**
+  running the RustSec database against the committed lockfile, so a new CVE
+  surfaces without a push (#59, #75). The release workflow now runs the
+  whole test suite and verifies the CHANGELOG names the version before
+  publishing (#66), and the convergence gate got a concurrency group and
+  per-job timeouts (#67).
 
 ### Changed
+
+- **`Module` now requires `Debug`.** Breaking. Every layer in the crate
+  already derived it; an out-of-tree `Module` adds `#[derive(Debug)]`.
+  This is what lets `Sequential` show its children (#61).
+- **`Dropout::new` returns `Result`.** Breaking. It rejects a drop
+  probability outside `[0, 1)`, which previously scaled survivors by
+  `1/(1 - p) <= 0` and produced NaNs; the fix at a call site is `?` (#74).
+- **`MatmulPlan`, `AdamStep` and `ParamGroup` are `#[non_exhaustive]`.**
+  Breaking for out-of-tree code that built them with a struct literal or
+  matched them exhaustively: construct through the constructors
+  (`AdamStep::new` is new) and add `..` to a destructure (#59).
+- **Metal and CUDA register explicitly, not before `main`.** Breaking
+  behaviour change. The `#[ctor]` constructor and the `ctor` dependency are
+  gone, along with CUDA's pre-main `dlopen` of `libcuda`. Call
+  `oxmera::init()` (or `oxmera_cuda::register_default()`) before a GPU
+  device; the CLI and examples already do. Only device 0 is registered —
+  `Device::Cuda`/`Metal` with `index > 0` is a typed `BackendUnavailable`,
+  now documented (#55, #65).
+- **`Tensor`'s `Debug` prints metadata** — shape, dtype, device,
+  requires_grad — not the entire storage buffer, which a derived `Debug`
+  dumped into every log line and panic message (#62).
 
 - **`Linear`, `Conv2d` and `Embedding` no longer implement `Clone`.**
   Breaking. `Param` is a shared handle by design, so deriving `Clone` on a
@@ -88,6 +145,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CI writes `TERMLENS_ARTIFACT_DIR` and renders what a failure left behind
     into the job summary; a new `skill-version` job fails when the vendored
     agent skill drifts from the dependency.
+
+### Fixed
+
+- **`Tensor::from_storage` accepted an out-of-bounds layout.** A negative
+  stride with too small an offset addressed before the storage and
+  panicked on the first read; the check now accounts for the minimum
+  addressed index as well as the maximum, and still admits a valid flip
+  view (#50).
+- **`narrow` overflowed `start + len`** in its own bounds check on a huge
+  range; it now reports a typed error instead (#51).
+- **`eigh` rounded an `f64` input to `f32`** before decomposing it, despite
+  a comment claiming it kept the precision. It now stays in `f64` end to
+  end (#52).
+- **`CrossEntropyLoss` returned `NaN` on an empty batch** (`0 * inf`) and
+  accepted a target whose length did not match the batch; both are typed
+  errors now (#47).
+- **`MSELoss` and `BCEWithLogitsLoss` accepted a broadcastable target**,
+  silently computing a wrong loss; the target must match the input shape
+  exactly (#48).
+- **`Conv2d` panicked on an input smaller than its kernel, or a zero
+  stride** — a `usize` underflow or a divide by zero — instead of
+  returning a typed error (#49).
+- **`BatchNorm2d`'s running variance was biased.** The running estimate now
+  uses the unbiased sample variance (matching PyTorch) while the current
+  batch is still normalized with the biased variance (#64).
+- **`argmax` hid `NaN`**, skipping it and pointing at an arbitrary element;
+  a `NaN` input is now a typed error (#74).
+- **`Optimizer::step` failed the whole step when one parameter had no
+  gradient**; it now skips that parameter, as PyTorch does (#53).
+- **GPU kernels truncated tensor extents, strides and offsets to `u32`**
+  with an unchecked cast; an out-of-range value is a typed error before
+  dispatch, not a wrong-but-plausible launch (#63).
+- **`train --tui` panicked (exit 101) when stdout was not a terminal**; it
+  now fails with a usage-style error and a non-zero exit (#56).
+- **Ctrl-C typed into the dashboard was ignored** — only `q` and `Esc`
+  quit. In raw mode it arrives as a key, which the event loop now treats
+  like the others (#57).
+
+### Performance
+
+- **CPU matmul borrows contiguous operands** rather than copying both on
+  every call; a strided or broadcast operand is still gathered, which is
+  the case that needs it (#73).
 
 ## [0.4.0] — 2026-09-06
 

@@ -12,13 +12,17 @@ pub enum Device {
     Cpu,
     /// An Apple-Silicon GPU via Metal, by device index.
     Metal {
-        /// Zero-based device index.
+        /// Zero-based device index. Registration adds device 0 only; a
+        /// higher index resolves to `BackendUnavailable`
+        /// (see `docs/LIMITATIONS.md`).
         index: usize,
     },
-    /// An NVIDIA GPU, by device index — served by `oxmera-cuda` when a
-    /// driver and a device are present at load time.
+    /// An NVIDIA GPU, by device index — served by `oxmera-cuda` once a
+    /// driver and device are registered (`oxmera_runtime::init`).
     Cuda {
-        /// Zero-based device index.
+        /// Zero-based device index. Registration adds device 0 only; a
+        /// higher index resolves to `BackendUnavailable`
+        /// (see `docs/LIMITATIONS.md`).
         index: usize,
     },
 }
