@@ -310,8 +310,13 @@ fn inspect_drives_oxmera_and_gets_the_committed_picture() {
     let _ = std::fs::remove_file(&seen);
 
     // The dashboard never exits on its own — it waits for `q` — so inspect
-    // snapshots it after the output goes quiet and says the deadline was
-    // reached. That distinction is the whole reason `--idle` exists.
+    // snapshots it after the output goes quiet and reports it still running.
+    // That distinction is the whole reason `--idle` exists. Which "still
+    // running" it is depends on what ended the wait: since termlens 0.11.3
+    // (termlens#374) a TUI that goes quiet for `--idle` reads `still running
+    // (killed on exit)`, and only one that keeps printing until `--timeout`
+    // says `at the deadline`. Both mean it did not exit, which is all this
+    // asserts.
     let out = Command::new(cli())
         .args([
             "inspect",
@@ -334,8 +339,8 @@ fn inspect_drives_oxmera_and_gets_the_committed_picture() {
     );
     let printed = String::from_utf8_lossy(&out.stdout);
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("still running at the deadline"),
-        "a TUI holds the terminal, so inspect reports the deadline rather \
+        String::from_utf8_lossy(&out.stderr).contains("still running"),
+        "a TUI holds the terminal, so inspect reports it still running rather \
          than an exit, on stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
