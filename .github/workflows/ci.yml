@@ -50,10 +50,10 @@ jobs:
       # summary, with SVG and HTML uploaded. It installs termlens-cli
       # itself, pinned to the version the lockfile names so the renderer and
       # the harness are one release.
-      - uses: vyncint/termlens/.github/actions/report@ff50ffcdf91f3567e4f5b0c2056b8ee02e65c450 # v0.11.7
+      - uses: vyncint/termlens/.github/actions/report@61f597e8447c295cccfcfcf43b2794d256db3841 # v0.11.8
         if: failure()
         with:
-          cli-version: "0.11.7"
+          cli-version: "0.11.8"
           name: termlens-report-ci-${{ matrix.os }}
 
   # The second configuration. Until 0.4.0 exactly one existed — every job
