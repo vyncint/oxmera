@@ -46,8 +46,8 @@ jobs:
       # A PTY failure is a picture, and a log is the worst place to read
       # one. This renders every screen the two steps above left behind into
       # the job summary, with SVG and HTML uploaded.
-      - uses: vyncint/termlens/.github/actions/report@61f597e8447c295cccfcfcf43b2794d256db3841 # v0.11.8
+      - uses: vyncint/termlens/.github/actions/report@484c02b2a124643c22412b6eb6bcd7016c1bfb90 # v0.11.9
         if: failure()
         with:
-          cli-version: "0.11.8"
+          cli-version: "0.11.9"
           name: termlens-report-stress-${{ matrix.os }}
